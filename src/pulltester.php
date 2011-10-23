@@ -59,6 +59,16 @@ class PullTester extends JCli
 		$this->close();
 	}
 
+	protected function createRepo()
+	{
+		if (!file_exists(PATH_CHECKOUTS . '/pulls'))
+		{
+			chdir(PATH_CHECKOUTS);
+			exec('git clone git@github.com:joomla/joomla-platform.git pulls');
+		}
+	}
+
+
 	protected function processPull($pull)
 	{
 		$db = JFactory::getDbo();
@@ -83,13 +93,15 @@ class PullTester extends JCli
 
 		if ($head->head != $pullRequest->head->sha) {
 			$url = $pullRequest->head->repo->clone_url;
-			chdir(PATH_CHECKOUTS);
+			$this->createRepo();
+			chdir(PATH_CHECKOUTS . '/pulls');
 			echo $url;
-			exec('rm -rf pull'.$number);
-			exec('git clone '.$url.' pull'.$number);
-			chdir(PATH_CHECKOUTS.'/pull'.$number);
-			exec('git checkout '.$pullRequest->head->ref);
+			exec('git remote add ' . $pullRequest->user->login . ' ' . $pullRequest->head->repo->git_url);
+			exec('git reset --hard');
+			exec('git pull ' . $pullRequest->user->login . ' ' . $pullRequest->head->ref . ':pull' . $number);
+			exec('git checkout pull' . $number);
 
+			exec('ant clean');
 			exec('ant phpunit');
 			exec('ant phpunit');
 			$results = $this->parseTestResults($number);
@@ -104,7 +116,7 @@ class PullTester extends JCli
 			$table->test_time = $results->time;
 			$table->store();
 
-			//$this->publishResults($table, $pullRequest);
+			$this->publishResults($table, $pullRequest);
 		} else {
 			echo 'Skipped Build';
 		}
@@ -136,21 +148,34 @@ class PullTester extends JCli
 
 		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
 		curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
-		curl_exec($ch);
+		//curl_exec($ch);
+		print_r($request->body);
 	}
 
 	protected function parseTestResults($number)
 	{
-		$reader = new XMLReader();
-		$reader->open(PATH_CHECKOUTS.'/pull'.$number.'/build/logs/junit.xml');
-		while ($reader->read() && $reader->name !== 'testsuite');
-		$results = new stdClass;
-		$results->tests = $reader->getAttribute('tests');
-		$results->assertions = $reader->getAttribute('assertions');
-		$results->failures = $reader->getAttribute('failures');
-		$results->errors = $reader->getAttribute('errors');
-		$results->time = $reader->getAttribute('time');
-		$reader->close();
+		if (file_exists(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml'))
+		{
+			$reader = new XMLReader();
+			$reader->open(PATH_CHECKOUTS.'/pullis/build/logs/junit.xml');
+			while ($reader->read() && $reader->name !== 'testsuite');
+			$results = new stdClass;
+			$results->tests = $reader->getAttribute('tests');
+			$results->assertions = $reader->getAttribute('assertions');
+			$results->failures = $reader->getAttribute('failures');
+			$results->errors = $reader->getAttribute('errors');
+			$results->time = $reader->getAttribute('time');
+			$reader->close();
+		}
+		else
+		{
+			$results = new stdClass;
+			$results->tests = 0;
+			$results->assertions = 0;
+			$results->failures = 0;
+			$results->errors = 0;
+			$results->time = 0;
+		}
 		return $results;
 	}
 
