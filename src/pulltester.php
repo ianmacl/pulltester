@@ -40,6 +40,10 @@ class PullTester extends JCli
 {
 	protected $github = null;
 
+	protected $table = null;
+
+	protected $report = null;
+
 	/**
 	 * Execute the application.
 	 *
@@ -52,25 +56,21 @@ class PullTester extends JCli
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
+
+		$this->createRepo();
+
 		foreach ($pulls AS $pull) {
+			$this->report = '';
 			$this->processPull($pull);
 		}
 
 		$this->close();
 	}
 
-	protected function createRepo()
-	{
-		if (!file_exists(PATH_CHECKOUTS . '/pulls'))
-		{
-			chdir(PATH_CHECKOUTS);
-			exec('git clone git@github.com:joomla/joomla-platform.git pulls');
-		}
-	}
-
-
 	protected function processPull($pull)
 	{
+		$results = new stdClass;
+
 		$db = JFactory::getDbo();
 
 		$number = $pull->number;
@@ -82,102 +82,223 @@ class PullTester extends JCli
 			return;
 		}
 
-		$db->setQuery('SELECT id, head FROM pulls WHERE pull_id = '.$number);
-		$head = $db->loadObject();
+		$pullData = $this->loadPull($pullRequest);
 
-		if (!is_object($head)) {
-			$head = new stdClass;
-			$head->head = '';
-			$head->id = 0;
+		$changed = false;
+
+		// if we haven't processed this pull request before or if new commits have been made against our repo or the head repo
+		if (!$pullData || $this->table->head != $pullRequest->head->sha || $this->table->base != $pullRequest->base->sha) {
+
+			// Step 1: See if the pull request will merge
+			// right now we do this strictly based on what github tells us
+			$mergeable = $pullRequest->mergeable;
+
+			if ($mergeable)
+			{
+				// Step 2: We try and git the repo and perform the build
+				$this->build($pullRequest);
+				$changed = true;
+			}
+			else
+			{
+				// if it was mergeable before and it isn't mergeable anymore, report that
+				if ($this->table->mergeable)
+				{
+					$changed = true;
+
+					$this->report .= 'This pull request could not be tested since the changes could not be cleanly merged.';
+				}
+			}
 		}
 
-		if ($head->head != $pullRequest->head->sha) {
-			$url = $pullRequest->head->repo->clone_url;
-			$this->createRepo();
-			chdir(PATH_CHECKOUTS . '/pulls');
-			echo $url;
-			exec('git remote add ' . $pullRequest->user->login . ' ' . $pullRequest->head->repo->git_url);
-			exec('git reset --hard');
-			exec('git pull ' . $pullRequest->user->login . ' ' . $pullRequest->head->ref . ':pull' . $number);
-			exec('git checkout pull' . $number);
+		if ($changed)
+		{
+			if ($mergeable)
+			{
+				$this->processResults($pullRequest);
+			}
 
-			exec('ant clean');
-			exec('ant phpunit');
-			exec('ant phpunit');
-			$results = $this->parseTestResults($number);
-			$table = JTable::getInstance('Pulls', 'Table');
-			$table->load($head->id);
-			$table->pull_id = $number;
-			$table->head = $pullRequest->head->sha;
-			$table->tests = $results->tests;
-			$table->assertions = $results->assertions;
-			$table->failures = $results->failures;
-			$table->errors = $results->errors;
-			$table->test_time = $results->time;
-			$table->store();
-
-			$this->publishResults($table, $pullRequest);
-		} else {
-			echo 'Skipped Build';
+			$this->publishResults($pullRequest);
 		}
 	}
 
-	protected function publishResults($table, $pullRequest)
+	public function loadPull($pull)
 	{
+		$this->table = JTable::getInstance('Pulls', 'Table');
+		if (!$this->table->loadByNumber($pull->number))
+		{
+			$this->table->reset();
+			$this->table->id = 0;
+			$this->table->pull_id = $pull->number;
+			$this->table->head = $pull->head->sha;
+			$this->table->base = $pull->base->sha;
+			$this->table->mergeable = true;
+			$this->table->store();
+			return false;
+		}
+
+		return true;
+	}
+
+	protected function createRepo()
+	{
+		if (!file_exists(PATH_CHECKOUTS . '/pulls'))
+		{
+			chdir(PATH_CHECKOUTS);
+			exec('git clone git@github.com:joomla/joomla-platform.git pulls');
+		}
+	}
+
+	protected function processResults($results)
+	{
+		$this->parsePhpUnit();
+		$this->parsePhpCs();
+	}
+
+	protected function build($pull)
+	{
+		chdir(PATH_CHECKOUTS . '/pulls');
+
+		// We add the users repo to our remote list if it isn't already there
+		if (!file_exists(PATH_CHECKOUTS . '/pulls/.git/refs/remotes/' . $pull->user->login))
+		{
+			exec('git remote add ' . $pull->user->login . ' ' . $pull->head->repo->git_url);
+		}
+
+		exec('git checkout staging');
+		exec('git checkout -b pull' . $pull->number);
+		exec('git fetch ' . $pull->user->login);
+
+		exec('git merge ' . $pull->user->login . '/' . $pull->head->ref);
+
+		exec('ant clean');
+		exec('ant phpunit');
+		exec('ant phpunit');
+
+		exec('ant phpcs');
+
+		exec('git checkout staging');
+		exec('git branch -D pull' . $pull->number);
+	}
+
+	protected function publishResults($pullRequest)
+	{
+
 		$project = $this->config->get('github_project');
 		$repo = $this->config->get('github_repo');
-		$url = 'https://api.github.com/repos/'.$project.'/'.$repo.'/issues/'.$table->pull_id.'/comments';
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL, $url);
-		curl_setopt($ch, CURLOPT_POST, true);
-		curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-		curl_setopt($ch, CURLOPT_USERPWD, $this->config->get('github_user').':'.$this->config->get('github_password'));
-		$request = new stdClass;
-		$request->body = '';
+		//$url = 'https://api.github.com/repos/'.$project.'/'.$repo.'/issues/'.$pullRequest->number.'/comments';
+		//$ch = curl_init();
+		//curl_setopt($ch, CURLOPT_URL, $url);
+		//curl_setopt($ch, CURLOPT_POST, true);
+		//curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+		//curl_setopt($ch, CURLOPT_USERPWD, $this->config->get('github_user').':'.$this->config->get('github_password'));
+
+		//$request = new stdClass;
+		//$request->body = '';
 
 		if ($pullRequest->base->ref != 'staging') {
-			$request->body = '**WARNING! Pull request is not against staging!**'."\n\n";
+			$this->report .= "\n\n" . '**WARNING! Pull request is not against staging!**';
 		}
 
-		$request->body .= '# Test Results'."\n";
-		$request->body .= 'Total Tests: '.$table->tests."\n";
-		$request->body .= 'Assertions: '.$table->assertions."\n";
-		$request->body .= 'Failures: '.$table->failures."\n";
-		$request->body .= 'Errors: '.$table->errors."\n";
-		$request->body .= 'Test Time: '.$table->test_time."\n";
-
-		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-		curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
-		//curl_exec($ch);
-		print_r($request->body);
+		//curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+		//curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
+		file_put_contents(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.txt', $this->report);
+		echo $this->report;
 	}
 
-	protected function parseTestResults($number)
+	protected function parsePhpUnit()
 	{
 		if (file_exists(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml'))
 		{
+			$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
+
+
+
 			$reader = new XMLReader();
-			$reader->open(PATH_CHECKOUTS.'/pullis/build/logs/junit.xml');
+			$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
 			while ($reader->read() && $reader->name !== 'testsuite');
-			$results = new stdClass;
-			$results->tests = $reader->getAttribute('tests');
-			$results->assertions = $reader->getAttribute('assertions');
-			$results->failures = $reader->getAttribute('failures');
-			$results->errors = $reader->getAttribute('errors');
-			$results->time = $reader->getAttribute('time');
+
+			$phpUnitTable->tests = $reader->getAttribute('tests');
+			$phpUnitTable->assertions = $reader->getAttribute('assertions');
+			$phpUnitTable->failures = $reader->getAttribute('failures');
+			$phpUnitTable->errors = $reader->getAttribute('errors');
+			$phpUnitTable->time = $reader->getAttribute('time');
+			$phpUnitTable->pulls_id = $this->table->id;
+			$phpUnitTable->store();
+
+			$errors = array();
+			$failures = array();
+
+			while ($reader->read())
+			{
+				if ($reader->name == 'error')
+				{
+					$errors[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+				}
+
+				if ($reader->name == 'failure')
+				{
+					$failures[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+				}
+			}
+
 			$reader->close();
+
+			$this->report .= 'Unit testing complete.  There were ' . $phpUnitTable->failures . ' failures and ' . $phpUnitTable->errors .
+						' errors from ' . $phpUnitTable->tests . ' tests and ' . $phpUnitTable->assertions . ' assertions.' . "\n";
 		}
 		else
 		{
-			$results = new stdClass;
-			$results->tests = 0;
-			$results->assertions = 0;
-			$results->failures = 0;
-			$results->errors = 0;
-			$results->time = 0;
+			$this->report .= 'Test log missing. Tests failed to execute.' . "\n";
 		}
-		return $results;
 	}
+
+	protected function parsePhpCs()
+	{
+		if (file_exists(PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml'))
+		{
+			$numWarnings = 0;
+			$numErrors = 0;
+
+			$warnings = array();
+			$errors = array();
+
+			$phpCsTable = JTable::getInstance('Checkstyle', 'Table');
+
+			$reader = new XMLReader();
+			$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
+			while ($reader->read())
+			{
+				if ($reader->name == 'error')
+				{
+					if ($reader->getAttribute('severity') == 'warning')
+					{
+						$numWarnings++;
+					}
+
+					if ($reader->getAttribute('severity') == 'error')
+					{
+						$numErrors++;
+					}
+				}
+			}
+
+			$phpCsTable->errors = $numErrors;
+			$phpCsTable->warnings = $numWarnings;
+
+			$phpCsTable->pulls_id = $this->table->id;
+			$phpCsTable->store();
+			$reader->close();
+
+			$this->report .= 'Checkstyle analysis reported ' . $numWarnings . ' warnings and ' . $numErrors . ' errors.' . "\n";
+		}
+		else
+		{
+			$this->report .= 'Checkstyle analysis not found.' . "\n";
+		}
+
+	}
+
 
 	/**
 	 * Method to load a PHP configuration class file based on convention and return the instantiated data object.  You

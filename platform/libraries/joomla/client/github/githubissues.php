@@ -40,59 +40,16 @@ class JGithubIssues
 		$this->connector = $connector;
 	}
 
-	protected function paginate($url, $page = 0, $per_page = 0)
+
+	public function addLabels($user, $repo, $id, $labels)
 	{
-		//TODO: Make a new base class and move paginate into it
-		$query_string = array();
-		
-		if ($page > 0) {
-			$query_string[] = 'page='.(int)$page;
-		}
-
-		if ($per_page > 0) {
-			$query_string[] = 'per_page='.(int)$per_page;
-		}
-
-		if (isset($query_string[0])) {
-			$query = implode('&', $query_string);
-		} else {
-			$query = '';
-		}
-
-		if (strlen($query) > 0) {
-			if (strpos($url, '?') === false) {
-				$url .= '?'.$query;
-			} else {
-				$url .= '&'.$query;
-			}
-		}
-
-		return $url;
+		$url = '/repos/' . $user . '/' .$repo . '/issues/' . (int) $id . '/labels';
+		return $this->connector->sendRequest($url, 'post', $labels)->body;
 	}
 
-	public function getAll($parameters = array(), $page = 0, $per_page = 0)
+	public function getLabels($user, $repo, $id, $page = 0, $per_page = 0)
 	{
-		$url = '/issues';
-
-		$queryString = '';
-
-		foreach ($parameters AS $parameter) {
-			$queryString .= '';
-		}
-		if (isset($options['filter'])) {
-		}
-		return $this->connector->sendRequest($this->paginate($url, $page, $per_page))->body;
-	}
-
-	public function getByUser($user, $page = 0, $per_page = 0)
-	{
-		$url = '/users/'.$user.'/gists';
-		return $this->connector->sendRequest($this->paginate($url, $page, $per_page))->body;
-	}
-
-	public function getPublic($page = 0, $per_page = 0)
-	{
-		$url = '/gists/public';
+		$url = '/repos/' . $user . '/' .$repo . '/issues/' . (int) $id . '/labels';
 		return $this->connector->sendRequest($this->paginate($url, $page, $per_page))->body;
 	}
 
@@ -153,29 +110,9 @@ class JGithubIssues
 		}
 	}
 
-	public function fork($gist_id)
+	public function createComment($user, $repo, $issue_id, $comment)
 	{
-		return $this->connector->sendRequest('/gists/'.(int)$gist_id.'/fork', 'put')->body;
-	}
-
-	public function delete($gist_id)
-	{
-		return $this->connector->sendRequest('/gists/'.(int)$gist_id, 'delete')->body;
-	}
-
-	public function getComments($gist_id)
-	{
-		return $this->connector->sendRequest('/gists/'.(int)$gist_id.'/comments')->body;
-	}
-
-	public function getComment($comment_id)
-	{
-		return $this->connector->sendRequest('/gists/comments/'.(int)$comment_id)->body;
-	}
-
-	public function createComment($gist_id, $comment)
-	{
-		return $this->connector->sendRequest('/gists/'.(int)$gist_id.'/comments', 'post', array('body' => $comment))->body;
+		return $this->connector->sendRequest('/repos/' . $user . '/' . $repo . '/issues/' . (int)$issue_id . '/comments', 'post', array('body' => $comment))->body;
 	}
 
 	public function editComment($comment_id, $comment)
