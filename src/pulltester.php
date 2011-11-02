@@ -44,6 +44,8 @@ class PullTester extends JCli
 
 	protected $report = null;
 
+	protected $base = null;
+
 	/**
 	 * Execute the application.
 	 *
@@ -58,6 +60,10 @@ class PullTester extends JCli
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
 
 		$this->createRepo();
+
+		$this->table = JTable::getInstance('Pulls', 'Table');
+
+		$this->base = $this->github->refs->get('joomla', 'joomla-platform', 'heads/staging')->object->sha;
 
 		foreach ($pulls AS $pull) {
 			$this->report = '';
@@ -81,13 +87,13 @@ class PullTester extends JCli
 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
 			return;
 		}
-
+		echo 'Processing pull request ' . $pullRequest->number . "\n";
 		$pullData = $this->loadPull($pullRequest);
 
 		$changed = false;
 
 		// if we haven't processed this pull request before or if new commits have been made against our repo or the head repo
-		if (!$pullData || $this->table->head != $pullRequest->head->sha || $this->table->base != $pullRequest->base->sha) {
+		if (!$pullData || $this->table->head != $pullRequest->head->sha || $this->table->base != $this->base) {
 
 			// Step 1: See if the pull request will merge
 			// right now we do this strictly based on what github tells us
@@ -95,6 +101,16 @@ class PullTester extends JCli
 
 			if ($mergeable)
 			{
+				// if commits were made to the head
+				if ($this->table->head != $pullRequest->head->sha)
+				{
+					$this->report .= 'Build triggered by changes to the head.' . "\n\n";
+				}
+				elseif ($this->table->base != $this->base)
+				{
+					$this->report .= 'Build triggered by changes to the base.' . "\n\n";
+				}
+
 				// Step 2: We try and git the repo and perform the build
 				$this->build($pullRequest);
 				$changed = true;
@@ -105,11 +121,16 @@ class PullTester extends JCli
 				if ($this->table->mergeable)
 				{
 					$changed = true;
+					$this->table->mergeable = false;
 
 					$this->report .= 'This pull request could not be tested since the changes could not be cleanly merged.';
 				}
 			}
 		}
+
+
+		$this->table->head = $pullRequest->head->sha;
+		$this->table->base = $this->base;
 
 		if ($changed)
 		{
@@ -119,6 +140,19 @@ class PullTester extends JCli
 			}
 
 			$this->publishResults($pullRequest);
+		}
+		else
+		{
+			echo 'No Changes detected.' . "\n\n";
+		}
+
+		try
+		{
+			$store = $this->table->store();
+		} 
+		catch (Exception $e)
+		{
+			echo $e->getMessage();
 		}
 	}
 
@@ -186,24 +220,14 @@ class PullTester extends JCli
 
 		$project = $this->config->get('github_project');
 		$repo = $this->config->get('github_repo');
-		//$url = 'https://api.github.com/repos/'.$project.'/'.$repo.'/issues/'.$pullRequest->number.'/comments';
-		//$ch = curl_init();
-		//curl_setopt($ch, CURLOPT_URL, $url);
-		//curl_setopt($ch, CURLOPT_POST, true);
-		//curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-		//curl_setopt($ch, CURLOPT_USERPWD, $this->config->get('github_user').':'.$this->config->get('github_password'));
-
-		//$request = new stdClass;
-		//$request->body = '';
 
 		if ($pullRequest->base->ref != 'staging') {
 			$this->report .= "\n\n" . '**WARNING! Pull request is not against staging!**';
 		}
 
-		//curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-		//curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
 		file_put_contents(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.txt', $this->report);
-		echo $this->report;
+		$this->github->issues->createComment($project, $repo, $pullRequest->number, $this->report);
+		echo $this->report . "\n\n";
 	}
 
 	protected function parsePhpUnit()
@@ -233,12 +257,12 @@ class PullTester extends JCli
 			{
 				if ($reader->name == 'error')
 				{
-					$errors[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+					//$errors[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
 				}
 
 				if ($reader->name == 'failure')
 				{
-					$failures[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+					//$failures[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
 				}
 			}
 

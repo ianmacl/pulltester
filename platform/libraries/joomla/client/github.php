@@ -15,6 +15,7 @@ JLoader::register('JHttpResponse', JPATH_PLATFORM.'/joomla/client/http.php');
 jimport('joomla.client.github.githubpulls');
 jimport('joomla.client.github.githubgists');
 jimport('joomla.client.github.githubissues');
+jimport('joomla.client.github.githubrefs');
 jimport('joomla.client.githubobject');
 
 /**
@@ -45,6 +46,8 @@ class JGithub
 	protected $issues = null;
 	
 	protected $pulls = null;
+
+	protected $refs = null;
 
 	protected $credentials = array();
 
@@ -94,6 +97,14 @@ class JGithub
 				$this->pulls = new JGithubPulls($this);
 			}
 			return $this->pulls;
+		}
+
+		if ($name == 'refs') {
+			if ($this->refs == null)
+			{
+				$this->refs = new JGithubRefs($this);
+			}
+			return $this->refs;
 		}
 
 	}
