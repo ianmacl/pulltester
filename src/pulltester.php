@@ -10,7 +10,6 @@
 
 define('_JEXEC', 1);
 
-
 /**
  * Turn on strict error reporting during development
  */
@@ -25,6 +24,8 @@ require_once dirname(dirname(__FILE__)) . '/platform/libraries/import.php';
 define('JPATH_BASE', dirname(__FILE__));
 define('JPATH_SITE', JPATH_BASE);
 define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
+
+define('PATH_OUTPUT', '/home/elkuku/eclipsespace/indigogit3/pulltester-gh-pages');
 
 jimport('joomla.application.cli');
 jimport('joomla.database');
@@ -44,6 +45,14 @@ class PullTester extends JCli
 
 	protected $report = null;
 
+	protected $reportHtml = '';
+
+	protected $verbose = false;
+
+	protected $phpUnitDebug = '';
+
+	protected $startTime = 0;
+
 	/**
 	 * Execute the application.
 	 *
@@ -53,18 +62,80 @@ class PullTester extends JCli
 	 */
 	public function execute()
 	{
+		$this->startTime = microtime(true);
+
+		$this->verbose = $this->input->get('v', 0);
+
+		$selectedPull = $this->input->get('pull', 0, 'INT');
+
+		$this->output('----------------------');
+		$this->output('-- Ian\'s PullTester --');
+		$this->output('----------------------');
+
 		JTable::addIncludePath(JPATH_BASE.'/tables');
+
 		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
+
+		$this->output('Fetching pull requests...', false);
+
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
 
-		$this->createRepo();
+		$this->output('OK');
 
-		foreach ($pulls AS $pull) {
+		$this->output('Creating the base repo...', false);
+		$this->createRepo();
+		$this->output('OK');
+
+		foreach ($pulls AS $pull)
+		{
+			if($selectedPull && $selectedPull != $pull->number)
+			{
+				$this->output('Skipping pull '.$pull->number);
+				continue;
+			}
+
+			$this->output('Processing pull '.$pull->number.'...');
+
 			$this->report = '';
+			$this->reportHtml = '';
 			$this->processPull($pull);
+
+			$this->output('OK');
+
+			$t = microtime(true);
+
+			$this->output(($t - $this->startTime).' secs');
+			$this->output('------------------------');
 		}
 
+		$this->totalTime = microtime(true) - $this->startTime;
+
+		$this->output('Finished in '.$this->totalTime.' secs =;)');
+
+		$this->generateStatsTable();
+
 		$this->close();
+	}
+
+	protected function getIndexData()
+	{
+		$db = JFactory::getDbo();
+
+		$query = $db->getQuery(true);
+
+		$query->from('pulls AS p');
+		$query->select('p.pull_id, p.mergeable');
+		$query->select('cs.warnings AS CS_warnings, cs.errors AS CS_errors');
+		$query->select('pu.failures AS Unit_failures, pu.errors AS Unit_errors');
+
+		$query->leftJoin('phpCsResults AS cs on p.id=cs.pulls_id');
+		$query->leftJoin('phpunitResults AS pu on p.id=pu.pulls_id');
+
+		$db->setQuery($query);
+
+		$data = $db->loadObjectList();
+
+		return $data;
 	}
 
 	protected function processPull($pull)
@@ -91,9 +162,8 @@ class PullTester extends JCli
 
 			// Step 1: See if the pull request will merge
 			// right now we do this strictly based on what github tells us
-			$mergeable = $pullRequest->mergeable;
 
-			if ($mergeable)
+			if ($pullRequest->mergeable)
 			{
 				// Step 2: We try and git the repo and perform the build
 				$this->build($pullRequest);
@@ -101,19 +171,24 @@ class PullTester extends JCli
 			}
 			else
 			{
+				$this->report .= 'This pull request could not be tested since the changes could not be cleanly merged.';
+				$this->reportHtml .= '<p class="img24 img-fail">This pull request could not be tested since the changes could not be cleanly merged.</p>'."\n";
+
 				// if it was mergeable before and it isn't mergeable anymore, report that
 				if ($this->table->mergeable)
 				{
-					$changed = true;
+					$this->report .= '...but it was mergeable before and it isn\'t mergeable anymore...';
+					$this->reportHtml .= '<p class="img24 img-fail">...but it was mergeable before and it isn\'t mergeable anymore...</p>'."\n";
 
-					$this->report .= 'This pull request could not be tested since the changes could not be cleanly merged.';
 				}
+
+				$changed = true;
 			}
 		}
 
 		if ($changed)
 		{
-			if ($mergeable)
+			if ($pullRequest->mergeable)
 			{
 				$this->processResults($pullRequest);
 			}
@@ -132,7 +207,7 @@ class PullTester extends JCli
 			$this->table->pull_id = $pull->number;
 			$this->table->head = $pull->head->sha;
 			$this->table->base = $pull->base->sha;
-			$this->table->mergeable = true;
+			$this->table->mergeable = $pull->mergeable;
 			$this->table->store();
 			return false;
 		}
@@ -142,8 +217,22 @@ class PullTester extends JCli
 
 	protected function createRepo()
 	{
-		if (!file_exists(PATH_CHECKOUTS . '/pulls'))
+		if (!file_exists(PATH_CHECKOUTS))
 		{
+			mkdir(PATH_CHECKOUTS);
+		}
+
+		if (file_exists(PATH_CHECKOUTS . '/pulls'))
+		{
+			//-- Update existing repository
+			// chdir(PATH_CHECKOUTS.'/pulls');
+			// exec('git checkout staging');
+			// exec('git fetch origin');
+			// exec('git merge origin/staging');
+		}
+		else
+		{
+			//-- Clone repository
 			chdir(PATH_CHECKOUTS);
 			exec('git clone git@github.com:joomla/joomla-platform.git pulls');
 		}
@@ -165,19 +254,55 @@ class PullTester extends JCli
 			exec('git remote add ' . $pull->user->login . ' ' . $pull->head->repo->git_url);
 		}
 
-		exec('git checkout staging');
-		exec('git checkout -b pull' . $pull->number);
+		exec('git checkout staging 2>/dev/null');
+
+		//-- Just in case, if, for any oscure reason, the branch we are trying to create already exists...
+		//-- git wont switch to it and will remain on the 'staging' branch so...
+		//-- let's first try to delete it =;)
+		exec('git branch -D pull'.$pull->number.' 2>/dev/null');
+
+		exec('git checkout -b pull'.$pull->number);
+
+		$this->output('Fetch repo: '.$pull->user->login);
+
 		exec('git fetch ' . $pull->user->login);
 
 		exec('git merge ' . $pull->user->login . '/' . $pull->head->ref);
 
-		exec('ant clean');
-		exec('ant phpunit');
-		exec('ant phpunit');
+		// 		exec('ant clean');
+		exec('rm build/logs/junit.xml 2>/dev/null');
 
-		exec('ant phpcs');
+		$this->output('Running PHPUnit...', false);
 
-		exec('git checkout staging');
+		ob_start();
+		// 		exec('ant phpunit');
+		// 		exec('ant phpunit');
+
+		echo shell_exec('phpunit 2>&1');
+
+		$this->phpUnitDebug = ob_get_clean();
+
+		$this->output('OK');
+
+		$this->output('Running the CodeSniffer...', false);
+		// 		exec('ant phpcs');
+		exec('mkdir build/logs 2>/dev/null');
+		exec('touch build/logs/checkstyle.xml');
+
+		echo shell_exec('phpcs'
+		// .' -p'
+		.' --report=checkstyle'
+		.' --report-file='.PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
+		.' --standard='
+		.'/home/elkuku/libs/joomla/'
+		// .$basedir
+		.'build/phpcs/Joomla'
+		.' libraries/joomla'
+		.' 2>&1');
+
+		$this->output('OK');
+
+		exec('git checkout staging 2>/dev/null');
 		exec('git branch -D pull' . $pull->number);
 	}
 
@@ -198,107 +323,304 @@ class PullTester extends JCli
 
 		if ($pullRequest->base->ref != 'staging') {
 			$this->report .= "\n\n" . '**WARNING! Pull request is not against staging!**';
+			$this->reportHtml .= '<h2 class="img24 img-fail">Pull request is not against staging!</h2>'."\n";
 		}
 
 		//curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
 		//curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
 		file_put_contents(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.txt', $this->report);
-		echo $this->report;
+
+		$html = '';
+		$html .= $this->getHead($pullRequest->number.' Test results');
+
+		$html .= '<body>'."\n";
+
+		$html .= '<a href="index.html">&lArr; Index</a>'."\n";
+
+		$html .= '<h1>Results for <a href="https://github.com/joomla/joomla-platform/pull/'.$pullRequest->number.'">'
+		.'pull request #'.$pullRequest->number.'</a></h1>'."\n";
+
+		$html .= $this->reportHtml;
+
+		$html .= '<div class="footer">Generated on '.date('d-M-Y H:i:s P T e').'</div>';
+		$html .= '</body></html>';
+
+		file_put_contents(PATH_OUTPUT . '/' . $pullRequest->number . '.html', $html);
+
+		//echo $this->report;
+	}
+
+	protected function generateStatsTable()
+	{
+		$data = $this->getIndexData();
+
+		$html = $this->getHead('Test results overview');
+
+		$html .= '<body>';
+
+		$html .= '<h1>Test results overview</h1>';
+
+		$html .= '<table>';
+
+		if(isset($data[0]))
+		{
+			$html .= '<tr>';
+
+			foreach ($data[0] as $key => $v)
+			{
+				$html .= '<th>'.$key.'</th>';
+			}
+			$html .= '</tr>';
+		}
+
+		foreach ($data as $entry)
+		{
+			$html .= '<tr>';
+
+			$mergeable = true;
+
+			foreach ($entry as $key => $value)
+			{
+				$replace = '%s';
+
+				if( ! $mergeable)
+				{
+					$replace = '-';
+				}
+				elseif('' == $value)
+				{
+					$replace = '<b style="color: red;">-?-</b>';
+				}
+				else
+				{
+					switch ($key)
+					{
+						case 'pull_id':
+							$replace = '<a href="%1$s.html">Pull %1$s</a>';
+							break;
+
+						case 'CS_warnings':
+							$replace =(0 == $value) ? '&radic;' : '<b style="color: orange;">%d</b>';
+							break;
+
+						case 'CS_errors':
+						case 'Unit_failures':
+						case 'Unit_errors':
+							$replace =(0 == $value) ? '&radic;' : '<b style="color: red;">%d</b>';
+							break;
+
+						case 'mergeable':
+							$mergeable =($value) ? true : false;
+							$value =($value) ? '&radic;' : '<b style="color: red">** NO **</b>';
+							break;
+					}//switch
+				}
+
+				$html .= '<td>'.sprintf($replace, $value).'</td>';
+			}//foreach
+
+			$html .= '</tr>'."\n";
+		}//foreach
+
+		$html .= '</table>';
+
+		$html .= '<div class="footer">'
+		. '</small><small><pre>C\'mon, I spent '.$this->totalTime.' seconds generating this pages.... have Fun =;)</pre></small></small>'
+		.'Generated on '.date('d-M-Y H:i:s P T e')
+		.'</div>';
+
+		$html .= '</body></html>';
+
+		file_put_contents(PATH_OUTPUT.'/index.html', $html);
 	}
 
 	protected function parsePhpUnit()
 	{
-		if (file_exists(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml'))
-		{
-			$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
+		$this->reportHtml .= '<h2>Unit Tests</h2>'."\n";
 
-
-
-			$reader = new XMLReader();
-			$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-			while ($reader->read() && $reader->name !== 'testsuite');
-
-			$phpUnitTable->tests = $reader->getAttribute('tests');
-			$phpUnitTable->assertions = $reader->getAttribute('assertions');
-			$phpUnitTable->failures = $reader->getAttribute('failures');
-			$phpUnitTable->errors = $reader->getAttribute('errors');
-			$phpUnitTable->time = $reader->getAttribute('time');
-			$phpUnitTable->pulls_id = $this->table->id;
-			$phpUnitTable->store();
-
-			$errors = array();
-			$failures = array();
-
-			while ($reader->read())
-			{
-				if ($reader->name == 'error')
-				{
-					$errors[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
-				}
-
-				if ($reader->name == 'failure')
-				{
-					$failures[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
-				}
-			}
-
-			$reader->close();
-
-			$this->report .= 'Unit testing complete.  There were ' . $phpUnitTable->failures . ' failures and ' . $phpUnitTable->errors .
-						' errors from ' . $phpUnitTable->tests . ' tests and ' . $phpUnitTable->assertions . ' assertions.' . "\n";
-		}
-		else
+		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml'))
 		{
 			$this->report .= 'Test log missing. Tests failed to execute.' . "\n";
+			$this->reportHtml .= '<h3 class="img24 img-fail">Test log missing. Tests failed to execute.</h3>'."\n";
+			$d = $this->phpUnitDebug;
+			$d = str_replace(PATH_CHECKOUTS . '/pulls/', '', $d);
+			$this->reportHtml .= '<pre class="debug">'.$d.'</pre>';
+
+			return;
+		}
+
+		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
+
+		$reader = new XMLReader();
+		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
+		while ($reader->read() && $reader->name !== 'testsuite');
+
+		$phpUnitTable->tests = $reader->getAttribute('tests');
+		$phpUnitTable->assertions = $reader->getAttribute('assertions');
+		$phpUnitTable->failures = $reader->getAttribute('failures');
+		$phpUnitTable->errors = $reader->getAttribute('errors');
+		$phpUnitTable->time = $reader->getAttribute('time');
+		$phpUnitTable->pulls_id = $this->table->id;
+		$phpUnitTable->store();
+
+		$errors = array();
+		$failures = array();
+
+		while ($reader->read())
+		{
+			if ($reader->name == 'error')
+			{
+				$errors[] = preg_replace('#\/[A-Za-z\/]*pulls#', '', $reader->readString());
+			}
+
+			if ($reader->name == 'failure')
+			{
+				$failures[] = preg_replace('#\/[A-Za-z\/]*pulls#', '', $reader->readString());
+			}
+		}
+
+		$reader->close();
+
+		$s = sprintf('Unit testing complete. There were %1d failures and %2d errors from %3d tests and %4d assertions.'
+		, $phpUnitTable->failures, $phpUnitTable->errors, $phpUnitTable->tests, $phpUnitTable->assertions);
+
+		$this->report .= $s;
+
+		$c =($phpUnitTable->failures || $phpUnitTable->errors) ? 'img-warn' : 'img-success';
+		$this->reportHtml .= '<p class="img24 '.$c.'">'.$s.'</p>'."\n";
+
+		if($errors)
+		{
+			$this->reportHtml .= '<h3>Errors</h3>';
+
+			$this->reportHtml .= '<ol>';
+
+			foreach($errors as $error)
+			{
+				if( ! $error)//regex produces emty errors :(
+				continue;
+
+				$this->reportHtml .= '<li><pre class="debug">'.htmlentities($error).'</pre></li>';
+			}
+
+			$this->reportHtml .= '</ol>';
+		}
+
+		if($failures)
+		{
+			$this->reportHtml .= '<h3>Failures</h3>';
+
+			$this->reportHtml .= '<ol>';
+
+			foreach($failures as $fail)
+			{
+				if( ! $fail)//regex produces emty errors :(
+				continue;
+
+				$this->reportHtml .= '<li><pre class="debug">'.htmlentities($fail).'</pre></li>';
+			}
+
+			$this->reportHtml .= '</ol>';
 		}
 	}
 
 	protected function parsePhpCs()
 	{
-		if (file_exists(PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml'))
+		$this->reportHtml .= '<h2>Checkstyle</h2>'."\n";
+
+		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml'))
 		{
-			$numWarnings = 0;
-			$numErrors = 0;
+			$this->report .= 'Checkstyle analysis not found.' . "\n";
+			$this->reportHtml .= '<h3 class="img24 img-fail>Checkstyle analysis not found.</h3>'."\n";
 
-			$warnings = array();
-			$errors = array();
+			return;
+		}
 
-			$phpCsTable = JTable::getInstance('Checkstyle', 'Table');
+		$numWarnings = 0;
+		$numErrors = 0;
 
-			$reader = new XMLReader();
-			$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
-			while ($reader->read())
+		$warnings = array();
+		$errors = array();
+
+		$phpCsTable = JTable::getInstance('Checkstyle', 'Table');
+
+		$reader = new XMLReader();
+		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
+
+		$details = '';
+
+		$detailsHtml = '';
+
+		$maxErrors = 10;
+
+		while ($reader->read())
+		{
+			if ($reader->name == 'file')
 			{
-				if ($reader->name == 'error')
-				{
-					if ($reader->getAttribute('severity') == 'warning')
-					{
-						$numWarnings++;
-					}
+				$fName = $reader->getAttribute('name');
 
-					if ($reader->getAttribute('severity') == 'error')
+				//-- @todo: strip the *right* path...
+				$fName = str_replace(PATH_CHECKOUTS . '/pulls/', '', $fName);
+			}
+
+			if ($reader->name == 'error')
+			{
+				if ($reader->getAttribute('severity') == 'warning')
+				{
+					$numWarnings++;
+				}
+
+				if ($reader->getAttribute('severity') == 'error')
+				{
+					$numErrors++;
+
+					$detailsHtml .= '<li><tt>'.$fName.':'.$reader->getAttribute('line').'</tt><br />';
+					$detailsHtml .= '<em>'.$reader->getAttribute('message').'</em></li>'."\n";
+
+					if($numErrors <= $maxErrors)
 					{
-						$numErrors++;
+						$details .= $fName.':'.$reader->getAttribute('line')."\n";
+						$details .= $reader->getAttribute('message')."\n";
 					}
 				}
 			}
-
-			$phpCsTable->errors = $numErrors;
-			$phpCsTable->warnings = $numWarnings;
-
-			$phpCsTable->pulls_id = $this->table->id;
-			$phpCsTable->store();
-			$reader->close();
-
-			$this->report .= 'Checkstyle analysis reported ' . $numWarnings . ' warnings and ' . $numErrors . ' errors.' . "\n";
 		}
-		else
+
+		$phpCsTable->errors = $numErrors;
+		$phpCsTable->warnings = $numWarnings;
+
+		$phpCsTable->pulls_id = $this->table->id;
+		$phpCsTable->store();
+		$reader->close();
+
+		$s = 'Checkstyle analysis reported ' . $numWarnings . ' warnings and ' . $numErrors . ' errors.' . "\n";
+		$this->report .= $s;
+
+		$c =($numErrors) ? 'img-warn' : 'img-success';
+		$this->reportHtml .= '<p class="img24 '.$c.'">'.$s.'</p>'."\n";
+
+		if($numErrors)
 		{
-			$this->report .= 'Checkstyle analysis not found.' . "\n";
+			$this->report .= '**Checkstyle error details**'."\n".$details."\n";
+			$this->reportHtml .= '<h3>Checkstyle error details</h3>'."\n".'<ul class="phpcs">'.$detailsHtml.'</ul>'."\n";
 		}
 
+		if($numErrors > $maxErrors)
+		{
+			$this->report .= '('.($numErrors - $maxErrors).' more errors)'."\n";
+		}
 	}
 
+	protected function getHead($title)
+	{
+		$htmlHead = '';
+		$htmlHead .= '<!doctype html><html><head><meta http-equiv="content-type" content="text/html; charset=UTF-8">';
+		$htmlHead .= '<title>'.$title.'</title>';
+		$htmlHead .= '<link href="assets/css/style.css" rel="stylesheet" type="text/css" />';
+		$htmlHead .= '</head>'."\n";
+
+		return $htmlHead;
+	}
 
 	/**
 	 * Method to load a PHP configuration class file based on convention and return the instantiated data object.  You
@@ -319,6 +641,14 @@ class PullTester extends JCli
 		$config = new JConfig;
 
 		return $config;
+	}
+
+	protected function output($text = '', $nl = true)
+	{
+		if( ! $this->verbose)
+		return;
+
+		$this->out($text, $nl);
 	}
 }
 
