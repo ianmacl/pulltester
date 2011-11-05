@@ -46,5 +46,66 @@ class TablePulls extends JTable
 			return false;
 		}
 		return $this->load($id);
-	}		
+	}
+
+	public function update($pulls)
+	{
+		//-- @todo this seems ugly :P
+
+		$activePulls = array();
+
+		foreach ($pulls as $pull)
+		{
+			$activePulls[] = $pull->number;
+		}
+
+		$query = $this->_db->getQuery(true);
+
+		$query->from($this->_tbl);
+		$query->select('pull_id');
+
+		$this->_db->setQuery($query);
+
+		$entries = $this->_db->loadResultArray();
+
+		$query->clear();
+
+		$query->delete($this->_tbl);
+
+		foreach ($entries as $entry)
+		{
+			if(in_array($entry, $activePulls))
+			{
+				continue;
+			}
+
+			//-- Delete the pull
+			$query->clear('where');
+
+			$query->where('pull_id='.$entry);
+
+			$this->_db->setQuery($query);
+			$this->_db->query();
+
+			//-- Let's also delete the html file -- @todo: move
+			if(file_exists(PATH_OUTPUT.'/'.$entry.'.html'))
+			{
+				unlink(PATH_OUTPUT.'/'.$entry.'.html');
+			}
+		}
+	}
+
+	/**
+	 * Truncate the table.
+	 *
+	 * @return void
+	 */
+	public function truncate()
+	{
+		$this->_db->setQuery('TRUNCATE TABLE '.$this->_tbl);
+
+		$this->_db->query();
+
+		return;
+	}
 }

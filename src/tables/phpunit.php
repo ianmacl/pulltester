@@ -16,5 +16,19 @@ class TablePhpunit extends JTable
 	public function __construct(&$db)
 	{
 		parent::__construct('phpunitResults', 'id', $db);
-	}		
+	}
+
+	/**
+	 * Truncate the table.
+	 *
+	 * @return void
+	 */
+	public function truncate()
+	{
+		$this->_db->setQuery('TRUNCATE TABLE '.$this->_tbl);
+
+		$this->_db->query();
+
+		return;
+	}
 }
