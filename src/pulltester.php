@@ -1,6 +1,14 @@
 #!/usr/bin/php
 <?php
 /**
+ * Pulltester.
+ *
+ * Available options:
+ * --update Update the base repo
+ * --reset [hard] Cleans tables and tatabase tables. "hard" also deletes the base repo.
+ * --pull <number> Process only a specific pull
+ * -v Be verbose.
+ *
  * @package     Joomla.Documentation
  * @subpackage  Application
  *
@@ -31,6 +39,7 @@ jimport('joomla.application.cli');
 jimport('joomla.database');
 jimport('joomla.database.table');
 jimport('joomla.client.github');
+jimport('joomla.client.github2');
 
 JError::$legacy = false;
 
@@ -62,19 +71,13 @@ class PullTester extends JCli
 	 */
 	public function execute()
 	{
+		JTable::addIncludePath(JPATH_BASE.'/tables');
+
 		$this->startTime = microtime(true);
 
 		$reset = $this->input->get('reset');
 
 		$this->verbose = $this->input->get('v', 0);
-
-		if($reset)
-		{
-			$this->output('Resetting...', false);
-			$this->reset('hard' == $reset);
-			$this->output('OK');
-			$this->output('Finished =;)');
-		}
 
 		$selectedPull = $this->input->get('pull', 0, 'INT');
 
@@ -82,7 +85,14 @@ class PullTester extends JCli
 		$this->output('-- Ian\'s PullTester --');
 		$this->output('----------------------');
 
-		$this->output('Creating the base repo...', false);
+		if($reset)
+		{
+			$this->output('Resetting...', false);
+			$this->reset('hard' == $reset);
+			$this->output('OK');
+		}
+
+		$this->output('Creating/Updating the base repo...', false);
 		$this->createRepo();
 		$this->output('OK');
 
@@ -90,8 +100,9 @@ class PullTester extends JCli
 		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
 
-		JTable::addIncludePath(JPATH_BASE.'/tables');
-		JTable::getInstance('Pulls', 'Table')->update($pulls);
+		$this->github2 = new JGithub2(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
+
+		$this->updateTables($pulls);
 
 		$this->output('OK');
 
@@ -147,6 +158,15 @@ class PullTester extends JCli
 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
 			return;
 		}
+
+// 		try {
+// 			$pullRequest2 = $this->github2->pulls->get($this->config->get('github_project'), $this->config->get('github_repo'), $number);
+// 		} catch (Exception $e) {
+// 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
+// 			return;
+// 		}
+// 		var_dump($pullRequest2);
+// 		return;
 
 		$pullData = $this->loadPull($pullRequest);
 
@@ -277,16 +297,19 @@ class PullTester extends JCli
 
 		exec('git fetch ' . $pull->user->login);
 
+		$this->output('Merge repo: '.$pull->user->login . '/' . $pull->head->ref);
 		exec('git merge ' . $pull->user->login . '/' . $pull->head->ref);
 
 		// 		exec('ant clean');
+		exec('mkdir build/logs 2>/dev/null');
 		exec('rm build/logs/junit.xml 2>/dev/null');
+		exec('touch build/logs/checkstyle.xml');
 
 		$this->output('Running PHPUnit...', false);
 
 		ob_start();
-		// 		exec('ant phpunit');
-		// 		exec('ant phpunit');
+		// exec('ant phpunit');
+		// exec('ant phpunit');
 
 		echo shell_exec('phpunit 2>&1');
 
@@ -295,9 +318,7 @@ class PullTester extends JCli
 		$this->output('OK');
 
 		$this->output('Running the CodeSniffer...', false);
-		// 		exec('ant phpcs');
-		exec('mkdir build/logs 2>/dev/null');
-		exec('touch build/logs/checkstyle.xml');
+		// exec('ant phpcs');
 
 		echo shell_exec('phpcs'
 		// .' -p'
@@ -312,7 +333,10 @@ class PullTester extends JCli
 
 		$this->output('OK');
 
-		exec('git checkout staging 2>/dev/null');
+		//-- Fishy things happen all along the way...
+		//-- Let's use the -f (force) option..
+		exec('git checkout -f staging');
+
 		exec('git branch -D pull' . $pull->number);
 	}
 
@@ -455,7 +479,8 @@ class PullTester extends JCli
 			return;
 		}
 
-		copy(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml', PATH_OUTPUT.'/test/'.$this->table->pull_id.'checkstyle.xml');
+		copy(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
+		, PATH_OUTPUT.'/test/'.$this->table->pull_id.'checkstyle.xml');
 
 		$numWarnings = 0;
 		$numErrors = 0;
@@ -580,22 +605,35 @@ class PullTester extends JCli
 	{
 		jimport('joomla.filesystem.file');
 
-		$this->output(($hard ? 'hard...' : 'soft...'), false);
 		$this->output('truncating tables...', false);
-
-		JTable::addIncludePath(JPATH_BASE.'/tables');
 
 		JTable::getInstance('Checkstyle', 'Table')->truncate();
 		JTable::getInstance('Phpunit', 'Table')->truncate();
 		JTable::getInstance('Pulls', 'Table')->truncate();
 
 		$this->output('deleting files...', false);
-		JFile::delete(JFolder::files(PATH_CHECKOUTS, '.', false, true));
-		JFile::delete(JFolder::files(PATH_OUTPUT, '.', false, true, array('index.html')));
 
+		//-- Remove the checkout files
 		if($hard)
 		{
-			$this->out('HARD - not implemented yet - will reset the repo...', false);
+			$this->output('ALL FILES...', false);
+
+			if(JFolder::exists(PATH_CHECKOUTS))
+			{
+				JFolder::delete(PATH_CHECKOUTS);
+			}
+		}
+		else
+		{
+			JFile::delete(JFolder::files(PATH_CHECKOUTS, '.', false, true));
+		}
+
+		//-- Delete all HTML files but the index.html
+		JFile::delete(JFolder::files(PATH_OUTPUT, '.', false, true, array('index.html')));
+
+		if(JFolder::exists(PATH_OUTPUT.'/test'))
+		{
+			JFile::delete(JFolder::files(PATH_OUTPUT.'/test', '.', false, true));
 		}
 	}
 
@@ -622,6 +660,12 @@ class PullTester extends JCli
 		return $data;
 	}
 
+	protected function updateTables($pulls)
+	{
+		JTable::getInstance('Pulls', 'Table')->update($pulls);
+		;
+	}
+
 	protected function generateStatsTable()
 	{
 		$statusColors = array(0 => 'ccff99', 1 => 'ffc',2 => 'ff7f7f',3 => 'ff0033');
@@ -633,6 +677,8 @@ class PullTester extends JCli
 		$html .= '<body>'."\n";
 
 		$html .= '<h1>Test results overview</h1>'."\n";
+
+		$html .= sprintf('We have %s open pull requests...', '<b>'.count($data).'</b>');
 
 		$html .= '<table>'."\n";
 
@@ -667,7 +713,7 @@ class PullTester extends JCli
 				}
 				elseif('' == $value)
 				{
-					$replace = '<b style="color: red;">-?-</b>';
+					$replace = '<b class="error">? ? ?</b>';
 					$overall = 2;
 				}
 				else
@@ -679,19 +725,19 @@ class PullTester extends JCli
 							break;
 
 						case 'CS_warnings':
-							$replace =(0 == $value) ? '&radic;' : '<b style="color: orange;">%d</b>';
+							$replace =(0 == $value) ? '&radic;' : '<b class="warn">%d</b>';
 							// 							$overall = 1;
 							break;
 
 						case 'CS_errors':
 						case 'Unit_failures':
 						case 'Unit_errors':
-							$replace =(0 == $value) ? '&radic;' : '<b style="color: red;">%d</b>';
+							$replace =(0 == $value) ? '&radic;' : '<b class="error">%d</b>';
 							$overall =(0 == $value) ? $overall : 1;
 							break;
 
 						case 'mergeable':
-							$replace =($value) ? '&radic;' : '<b style="color: red">** NO **</b>';
+							$replace =($value) ? '&radic;' : '<b class="error">** NO **</b>';
 							$mergeable =($value) ? true : false;
 							break;
 					}//switch
@@ -755,8 +801,9 @@ class PullTester extends JCli
 	protected function fetchConfigurationData($config = 'test')
 	{
 		$configFile = $this->input->get('config', 'config.php');
-		require_once($configFile);
-		if (!class_exists('JConfig')) {
+		require_once $configFile;
+		if (!class_exists('JConfig'))
+		{
 			return false;
 		}
 		$config = new JConfig;
@@ -771,9 +818,19 @@ class PullTester extends JCli
 
 		$this->out($text, $nl);
 	}
+}//class
+
+try
+{
+	// Execute the application.
+	JCli::getInstance('PullTester')->execute();
+
+	exit(0);
 }
+catch (Exception $e)
+{
+	// An exception has been caught, just echo the message.
+	fwrite(STDOUT, $e->getMessage() . "\n");
 
-// Execute the application.
-JCli::getInstance('PullTester')->execute();
-
-exit(0);
+	exit($e->getCode());
+}//try
