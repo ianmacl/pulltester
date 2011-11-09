@@ -1,13 +1,14 @@
 #!/usr/bin/php
 <?php
 /**
- * Pulltester.
+ * PullTester.
  *
  * Available options:
- * --update Update the base repo
- * --reset [hard] Cleans tables and tatabase tables. "hard" also deletes the base repo.
- * --pull <number> Process only a specific pull
- * -v Be verbose.
+ * --update         Update the base repo.
+ * --reset [hard]   Cleans tables and tatabase tables. "hard" also deletes the base repo.
+ * --pull <number>  Process only a specific pull.
+ *
+ * -v               Be verbose.
  *
  * @package     Joomla.Documentation
  * @subpackage  Application
@@ -41,6 +42,12 @@ jimport('joomla.database.table');
 jimport('joomla.client.github');
 jimport('joomla.client.github2');
 
+require 'helper.php';
+require_once 'parsers/phpunit.php';
+require_once 'parsers/phpcs.php';
+require_once 'formats/markdown.php';
+require_once 'formats/html.php';
+
 JError::$legacy = false;
 
 /**
@@ -52,15 +59,18 @@ class PullTester extends JCli
 
 	protected $table = null;
 
-	protected $report = null;
-
-	protected $reportHtml = '';
-
 	protected $verbose = false;
 
 	protected $phpUnitDebug = '';
 
+	/**
+	 * @var testResult
+	 */
+	protected $testResults = null;
+
 	protected $startTime = 0;
+
+	protected $options = null;
 
 	/**
 	 * Execute the application.
@@ -72,6 +82,11 @@ class PullTester extends JCli
 	public function execute()
 	{
 		JTable::addIncludePath(JPATH_BASE.'/tables');
+
+		$this->options = new stdClass;
+
+		$this->testResults = new stdClass;
+		$this->testResults->error = '';
 
 		$this->startTime = microtime(true);
 
@@ -99,18 +114,16 @@ class PullTester extends JCli
 		$this->output('Fetching pull requests...', false);
 		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
-
-		$this->github2 = new JGithub2(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
-
-		$this->updateTables($pulls);
-
 		$this->output('OK');
+
+		JTable::getInstance('Pulls', 'Table')->update($pulls);
 
 		$cnt = 1;
 
-		foreach ($pulls AS $pull)
+		foreach ($pulls as $pull)
 		{
-			if($selectedPull && $selectedPull != $pull->number)
+			if($selectedPull
+			&& $selectedPull != $pull->number)
 			{
 				$this->output('Skipping pull '.$pull->number);
 				$cnt ++;
@@ -121,9 +134,8 @@ class PullTester extends JCli
 			$this->output('Processing pull '.$pull->number.'...', false);
 			$this->output(sprintf('(%d/%d)...', $cnt, count($pulls)), false);
 
-			$this->report = '';
-			$this->reportHtml = '';
-			$this->processPull($pull);
+			$forceUpdate =($selectedPull) ? true : false;
+			$this->processPull($pull, $forceUpdate);
 
 			$t = microtime(true);
 
@@ -136,7 +148,8 @@ class PullTester extends JCli
 		$this->totalTime = microtime(true) - $this->startTime;
 
 		$this->output('Generating stats...', false);
-		$this->generateStatsTable();
+		$content = PullTesterFormatHtml::formatIndex($this->getIndexData(), $this->totalTime);
+		file_put_contents(PATH_OUTPUT.'/index.html', $content);
 		$this->output('OK');
 
 		$this->output('Total time: '.$this->totalTime.' secs =;)');
@@ -144,11 +157,9 @@ class PullTester extends JCli
 		$this->close();
 	}
 
-	protected function processPull($pull)
+	protected function processPull($pull, $forceUpdate = false)
 	{
 		$results = new stdClass;
-
-		$db = JFactory::getDbo();
 
 		$number = $pull->number;
 
@@ -159,24 +170,19 @@ class PullTester extends JCli
 			return;
 		}
 
-// 		try {
-// 			$pullRequest2 = $this->github2->pulls->get($this->config->get('github_project'), $this->config->get('github_repo'), $number);
-// 		} catch (Exception $e) {
-// 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
-// 			return;
-// 		}
-// 		var_dump($pullRequest2);
-// 		return;
-
 		$pullData = $this->loadPull($pullRequest);
 
 		$changed = false;
 
 		// if we haven't processed this pull request before or if new commits have been made against our repo or the head repo
-		if (!$pullData
+		if ($forceUpdate
+		|| ! $pullData
 		|| $this->table->head != $pullRequest->head->sha
 		|| $this->table->base != $pullRequest->base->sha)
 		{
+			if($forceUpdate)
+			$this->output('update forced...', false);
+
 			// Update the table
 			$this->table->head = $pullRequest->head->sha;
 			$this->table->base = $pullRequest->base->sha;
@@ -196,14 +202,12 @@ class PullTester extends JCli
 			}
 			else
 			{
-				$this->report .= 'This pull request could not be tested since the changes could not be cleanly merged.';
-				$this->reportHtml .= '<p class="img24 img-fail">This pull request could not be tested since the changes could not be cleanly merged.</p>'."\n";
+				$this->testResults->error = 'This pull request could not be tested since the changes could not be cleanly merged.';
 
 				// if it was mergeable before and it isn't mergeable anymore, report that
 				if ($this->table->mergeable)
 				{
-					$this->report .= '...but it was mergeable before and it isn\'t mergeable anymore...';
-					$this->reportHtml .= '<p class="img24 img-fail">...but it was mergeable before and it isn\'t mergeable anymore...</p>'."\n";
+					$this->testResults->error .= '...but it was mergeable before and it isn\'t mergeable anymore...';
 				}
 			}
 		}
@@ -244,9 +248,17 @@ class PullTester extends JCli
 			mkdir(PATH_CHECKOUTS);
 		}
 
+		if( ! file_exists(PATH_OUTPUT))
+		throw new Exception('Invalid output directory: '.PATH_OUTPUT);
+
 		if( ! file_exists(PATH_OUTPUT.'/test/'))
 		{
 			mkdir(PATH_OUTPUT.'/test/');
+		}
+
+		if( ! file_exists(PATH_OUTPUT.'/pulls/'))
+		{
+			mkdir(PATH_OUTPUT.'/pulls/');
 		}
 
 		if (file_exists(PATH_CHECKOUTS . '/pulls'))
@@ -270,8 +282,8 @@ class PullTester extends JCli
 
 	protected function processResults($results)
 	{
-		$this->parsePhpUnit();
-		$this->parsePhpCs();
+		$this->testResults->phpunit = PullTesterParserPhpUnit::parse($this->phpUnitDebug, $this->table);
+		$this->testResults->phpcs = PullTesterParserPhpCS::parse($this->table);
 	}
 
 	protected function build($pull)
@@ -321,7 +333,6 @@ class PullTester extends JCli
 		// exec('ant phpcs');
 
 		echo shell_exec('phpcs'
-		// .' -p'
 		.' --report=checkstyle'
 		.' --report-file='.PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
 		.' --standard='
@@ -340,223 +351,6 @@ class PullTester extends JCli
 		exec('git branch -D pull' . $pull->number);
 	}
 
-	protected function parsePhpUnit()
-	{
-		$this->reportHtml .= '<h2>Unit Tests</h2>'."\n";
-
-		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml'))
-		{
-			$this->report .= 'Test log missing. Tests failed to execute.' . "\n";
-			$this->reportHtml .= '<h3 class="img24 img-fail">Test log missing. Tests failed to execute.</h3>'."\n";
-
-			$d = $this->phpUnitDebug;
-			$d = str_replace(PATH_CHECKOUTS . '/pulls/', '', $d);
-			$d = str_replace('/opt/lampp', '...', $d);
-
-			$this->reportHtml .= '<pre class="debug">'.$d.'</pre>';
-
-			return;
-		}
-
-		copy(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml', PATH_OUTPUT.'/test/'.$this->table->pull_id.'junit.xml');
-
-		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
-
-		//....heho infinite loop in JError...
-		// $xml = JFactory::getXML(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-		// do it by hand..
-		// Disable libxml errors and allow to fetch error information as needed
-		libxml_use_internal_errors(true);
-
-		$xml = simplexml_load_file(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-
-		if (empty($xml))
-		{
-			// There was an error
-			$d = $this->phpUnitDebug;
-			$d = str_replace(PATH_CHECKOUTS . '/pulls/', '', $d);
-			$d = str_replace('/opt/lampp', '...', $d);
-
-			$this->reportHtml .= '<pre class="debug">'.$d;
-
-			foreach (libxml_get_errors() as $error)
-			{
-				$this->reportHtml .= $error->message."\n";
-			}
-
-			$this->reportHtml .= '</pre>';
-
-			return;
-		}
-		else
-		{
-			//-- @TODO use simple_xml to parse xml files..
-			// var_dump($xml);
-		}
-
-		$reader = new XMLReader();
-		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-		while ($reader->read() && $reader->name !== 'testsuite');
-
-		$phpUnitTable->tests = $reader->getAttribute('tests');
-		$phpUnitTable->assertions = $reader->getAttribute('assertions');
-		$phpUnitTable->failures = $reader->getAttribute('failures');
-		$phpUnitTable->errors = $reader->getAttribute('errors');
-		$phpUnitTable->time = $reader->getAttribute('time');
-		$phpUnitTable->pulls_id = $this->table->id;
-		$phpUnitTable->store();
-
-		$errors = array();
-		$failures = array();
-
-		while ($reader->read())
-		{
-			if ($reader->name == 'error')
-			{
-				$errors[] = preg_replace('#\/[A-Za-z\/]*pulls#', '', $reader->readString());
-			}
-
-			if ($reader->name == 'failure')
-			{
-				$failures[] = preg_replace('#\/[A-Za-z\/]*pulls#', '', $reader->readString());
-			}
-		}
-
-		$reader->close();
-
-		$s = sprintf('Unit testing complete. There were %1d failures and %2d errors from %3d tests and %4d assertions.'
-		, $phpUnitTable->failures, $phpUnitTable->errors, $phpUnitTable->tests, $phpUnitTable->assertions);
-
-		$this->report .= $s;
-
-		$c =($phpUnitTable->failures || $phpUnitTable->errors) ? 'img-warn' : 'img-success';
-		$this->reportHtml .= '<p class="img24 '.$c.'">'.$s.'</p>'."\n";
-
-		if($errors)
-		{
-			$this->reportHtml .= '<h3>Errors</h3>';
-
-			$this->reportHtml .= '<ol>';
-
-			foreach($errors as $error)
-			{
-				if( ! $error)//regex produces emty errors :(
-				continue;
-
-				$this->reportHtml .= '<li><pre class="debug">'.htmlentities($error).'</pre></li>';
-			}
-
-			$this->reportHtml .= '</ol>';
-		}
-
-		if($failures)
-		{
-			$this->reportHtml .= '<h3>Failures</h3>';
-
-			$this->reportHtml .= '<ol>';
-
-			foreach($failures as $fail)
-			{
-				if( ! $fail)//regex produces emty errors :(
-				continue;
-
-				$this->reportHtml .= '<li><pre class="debug">'.htmlentities($fail).'</pre></li>';
-			}
-
-			$this->reportHtml .= '</ol>';
-		}
-	}
-
-	protected function parsePhpCs()
-	{
-		$this->reportHtml .= '<h2>Checkstyle</h2>'."\n";
-
-		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml'))
-		{
-			$this->report .= 'Checkstyle analysis not found.' . "\n";
-			$this->reportHtml .= '<h3 class="img24 img-fail>Checkstyle analysis not found.</h3>'."\n";
-
-			return;
-		}
-
-		copy(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
-		, PATH_OUTPUT.'/test/'.$this->table->pull_id.'checkstyle.xml');
-
-		$numWarnings = 0;
-		$numErrors = 0;
-
-		$warnings = array();
-		$errors = array();
-
-		$phpCsTable = JTable::getInstance('Checkstyle', 'Table');
-
-		$reader = new XMLReader();
-		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
-
-		$details = '';
-
-		$detailsHtml = '';
-
-		$maxErrors = 10;
-
-		while ($reader->read())
-		{
-			if ($reader->name == 'file')
-			{
-				$fName = $reader->getAttribute('name');
-
-				//-- @todo: strip the *right* path...
-				$fName = str_replace(PATH_CHECKOUTS . '/pulls/', '', $fName);
-			}
-
-			if ($reader->name == 'error')
-			{
-				if ($reader->getAttribute('severity') == 'warning')
-				{
-					$numWarnings++;
-				}
-
-				if ($reader->getAttribute('severity') == 'error')
-				{
-					$numErrors++;
-
-					$detailsHtml .= '<li><tt>'.$fName.':'.$reader->getAttribute('line').'</tt><br />';
-					$detailsHtml .= '<em>'.$reader->getAttribute('message').'</em></li>'."\n";
-
-					if($numErrors <= $maxErrors)
-					{
-						$details .= $fName.':'.$reader->getAttribute('line')."\n";
-						$details .= $reader->getAttribute('message')."\n";
-					}
-				}
-			}
-		}
-
-		$phpCsTable->errors = $numErrors;
-		$phpCsTable->warnings = $numWarnings;
-
-		$phpCsTable->pulls_id = $this->table->id;
-		$phpCsTable->store();
-		$reader->close();
-
-		$s = 'Checkstyle analysis reported ' . $numWarnings . ' warnings and ' . $numErrors . ' errors.' . "\n";
-		$this->report .= $s;
-
-		$c =($numErrors) ? 'img-warn' : 'img-success';
-		$this->reportHtml .= '<p class="img24 '.$c.'">'.$s.'</p>'."\n";
-
-		if($numErrors)
-		{
-			$this->report .= '**Checkstyle error details**'."\n".$details."\n";
-			$this->reportHtml .= '<h3>Checkstyle error details</h3>'."\n".'<ul class="phpcs">'.$detailsHtml.'</ul>'."\n";
-		}
-
-		if($numErrors > $maxErrors)
-		{
-			$this->report .= '('.($numErrors - $maxErrors).' more errors)'."\n";
-		}
-	}
-
 	protected function publishResults($pullRequest)
 	{
 
@@ -572,31 +366,14 @@ class PullTester extends JCli
 		//$request = new stdClass;
 		//$request->body = '';
 
-		if ($pullRequest->base->ref != 'staging') {
-			$this->report .= "\n\n" . '**WARNING! Pull request is not against staging!**';
-			$this->reportHtml .= '<h2 class="img24 img-fail">Pull request is not against staging!</h2>'."\n";
-		}
-
 		//curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
 		//curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
-		file_put_contents(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.txt', $this->report);
 
-		$html = '';
-		$html .= $this->getHead($pullRequest->number.' Test results');
+		$report = PullTesterFormatMarkdown::format($pullRequest, $this->testResults);
+		file_put_contents(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.test.txt', $report);
 
-		$html .= '<body>'."\n";
-
-		$html .= '<a href="index.html">&lArr; Index</a>'."\n";
-
-		$html .= '<h1>Results for <a href="https://github.com/joomla/joomla-platform/pull/'.$pullRequest->number.'">'
-		.'pull request #'.$pullRequest->number.'</a></h1>'."\n";
-
-		$html .= $this->reportHtml;
-
-		$html .= '<div class="footer">Generated on '.date('d-M-Y H:i:s P T e').'</div>';
-		$html .= '</body></html>'."\n\n";
-
-		file_put_contents(PATH_OUTPUT . '/' . $pullRequest->number . '.html', $html);
+		$report = PullTesterFormatHtml::format($pullRequest, $this->testResults);
+		file_put_contents(PATH_OUTPUT . '/pulls/' . $pullRequest->number . '.html', $report);
 
 		//echo $this->report;
 	}
@@ -628,8 +405,11 @@ class PullTester extends JCli
 			JFile::delete(JFolder::files(PATH_CHECKOUTS, '.', false, true));
 		}
 
-		//-- Delete all HTML files but the index.html
-		JFile::delete(JFolder::files(PATH_OUTPUT, '.', false, true, array('index.html')));
+		//-- Delete all HTML files
+		if(JFolder::exists(PATH_OUTPUT.'/test'))
+		{
+			JFile::delete(JFolder::files(PATH_OUTPUT.'/pulls', '.', false, true));
+		}
 
 		if(JFolder::exists(PATH_OUTPUT.'/test'))
 		{
@@ -658,135 +438,6 @@ class PullTester extends JCli
 		$data = $db->loadObjectList();
 
 		return $data;
-	}
-
-	protected function updateTables($pulls)
-	{
-		JTable::getInstance('Pulls', 'Table')->update($pulls);
-		;
-	}
-
-	protected function generateStatsTable()
-	{
-		$statusColors = array(0 => 'ccff99', 1 => 'ffc',2 => 'ff7f7f',3 => 'ff0033');
-
-		$data = $this->getIndexData();
-
-		$html = $this->getHead('Test results overview');
-
-		$html .= '<body>'."\n";
-
-		$html .= '<h1>Test results overview</h1>'."\n";
-
-		$html .= sprintf('We have %s open pull requests...', '<b>'.count($data).'</b>');
-
-		$html .= '<table>'."\n";
-
-		if(isset($data[0]))
-		{
-			$html .= '<tr>';
-
-			foreach ($data[0] as $key => $v)
-			{
-				$html .= '<th>'.$key.'</th>';
-			}
-
-			$html .= '<th>Status</th>';
-			$html .= '</tr>'."\n";
-		}
-
-		foreach ($data as $entry)
-		{
-			$html .= '<tr>';
-
-			$mergeable = true;
-			$overall = 0;
-
-			foreach ($entry as $key => $value)
-			{
-				$replace = '%s';
-
-				if( ! $mergeable)
-				{
-					$replace = '-';
-					$overall = 3;
-				}
-				elseif('' == $value)
-				{
-					$replace = '<b class="error">? ? ?</b>';
-					$overall = 2;
-				}
-				else
-				{
-					switch ($key)
-					{
-						case 'pull_id':
-							$replace = '<a href="%1$s.html">Pull %1$s</a>';
-							break;
-
-						case 'CS_warnings':
-							$replace =(0 == $value) ? '&radic;' : '<b class="warn">%d</b>';
-							// 							$overall = 1;
-							break;
-
-						case 'CS_errors':
-						case 'Unit_failures':
-						case 'Unit_errors':
-							$replace =(0 == $value) ? '&radic;' : '<b class="error">%d</b>';
-							$overall =(0 == $value) ? $overall : 1;
-							break;
-
-						case 'mergeable':
-							$replace =($value) ? '&radic;' : '<b class="error">** NO **</b>';
-							$mergeable =($value) ? true : false;
-							break;
-					}//switch
-				}
-
-				$html .= '<td>'.sprintf($replace, $value).'</td>';
-			}//foreach
-
-			$html .= '<td style="background-color: #'.$statusColors[$overall].'">&nbsp;</td>';
-
-			$html .= '</tr>'."\n";
-		}//foreach
-
-		$html .= '</table>'."\n";
-
-		$total = $this->totalTime;
-
-		if(file_exists(PATH_OUTPUT.'/index.html'))
-		{
-			$test = file_get_contents(PATH_OUTPUT.'/index.html');
-
-			preg_match('#<span class="totalruntime">([0-9.]+)#', $test, $matches);
-
-			if($matches)
-			{
-				$total += $matches[1];
-			}
-		}
-
-		$html .= '<div class="footer">'
-		. '<small><small>C\'mon, I spent <span class="totalruntime">'.$total.'</span> seconds generating this pages (excluding tests).... </small></small><big>have Fun</big> =;)<br />'
-		.'Generated on '.date('d-M-Y H:i:s P T e')
-		.'</div>'."\n";
-
-		$html .= '</body></html>'."\n\n";
-
-		file_put_contents(PATH_OUTPUT.'/index.html', $html);
-	}
-
-	protected function getHead($title)
-	{
-		$htmlHead = '';
-		$htmlHead .= '<!doctype html><html>'."\n";
-		$htmlHead .= '<head><meta http-equiv="content-type" content="text/html; charset=UTF-8">'."\n";
-		$htmlHead .= '<title>'.$title.'</title>'."\n";
-		$htmlHead .= '<link href="assets/css/style.css" rel="stylesheet" type="text/css" />'."\n";
-		$htmlHead .= '</head>'."\n";
-
-		return $htmlHead;
 	}
 
 	/**
@@ -819,6 +470,18 @@ class PullTester extends JCli
 		$this->out($text, $nl);
 	}
 }//class
+
+class TestResult
+{
+	public $warnings = array();
+	public $errors = array();
+	public $failures = array();
+
+	public $messages = array();
+
+	public $error = '';
+	public $debugMessages = array();
+}
 
 try
 {
