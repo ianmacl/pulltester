@@ -55,6 +55,7 @@ class PullTester extends JCli
 	 */
 	public function execute()
 	{
+		exec('rm -rf ' . PATH_CHECKOUTS . '/pulls');
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
@@ -242,34 +243,41 @@ class PullTester extends JCli
 			$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
 			while ($reader->read() && $reader->name !== 'testsuite');
 
-			$phpUnitTable->tests = $reader->getAttribute('tests');
-			$phpUnitTable->assertions = $reader->getAttribute('assertions');
-			$phpUnitTable->failures = $reader->getAttribute('failures');
-			$phpUnitTable->errors = $reader->getAttribute('errors');
-			$phpUnitTable->time = $reader->getAttribute('time');
-			$phpUnitTable->pulls_id = $this->table->id;
-			$phpUnitTable->store();
-
-			$errors = array();
-			$failures = array();
-
-			while ($reader->read())
+			if ($reader->name == 'testsuite')
 			{
-				if ($reader->name == 'error')
+				$phpUnitTable->tests = $reader->getAttribute('tests');
+				$phpUnitTable->assertions = $reader->getAttribute('assertions');
+				$phpUnitTable->failures = $reader->getAttribute('failures');
+				$phpUnitTable->errors = $reader->getAttribute('errors');
+				$phpUnitTable->time = $reader->getAttribute('time');
+				$phpUnitTable->pulls_id = $this->table->id;
+				$phpUnitTable->store();
+
+				$errors = array();
+				$failures = array();
+
+				while ($reader->read())
 				{
-					//$errors[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+					if ($reader->name == 'error')
+					{
+						//$errors[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+					}
+
+					if ($reader->name == 'failure')
+					{
+						//$failures[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
+					}
 				}
 
-				if ($reader->name == 'failure')
-				{
-					//$failures[] = preg_replace('#\/[A-Za-z\/]*pulls##', '', $reader->readString());
-				}
-			}
 
-			$reader->close();
-
-			$this->report .= 'Unit testing complete.  There were ' . $phpUnitTable->failures . ' failures and ' . $phpUnitTable->errors .
+				$this->report .= 'Unit testing complete.  There were ' . $phpUnitTable->failures . ' failures and ' . $phpUnitTable->errors .
 						' errors from ' . $phpUnitTable->tests . ' tests and ' . $phpUnitTable->assertions . ' assertions.' . "\n";
+			}
+			else
+			{
+				$this->report .= 'The tests completed but there was a problem parsing the report.' . "\n";
+			}
+			$reader->close();
 		}
 		else
 		{
