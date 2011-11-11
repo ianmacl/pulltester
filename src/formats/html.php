@@ -43,8 +43,6 @@ class PullTesterFormatHtml
 					$html[] =  '<pre class="debug">'.$message.'</pre>';
 				}
 			}
-
-			if(false){}
 			else
 			{
 				$c =($testResults->phpunit->failures || $testResults->phpunit->errors) ? 'img-warn' : 'img-success';
@@ -96,10 +94,10 @@ class PullTesterFormatHtml
 			{
 				$html[] = '<h3 class="img24 img-fail">'.$testResults->phpcs->error.'</h3>';
 
-				foreach ($testResults->phpcs->debugMessages as $message)
-				{
-					$html[] =  '<pre class="debug">'.$message.'</pre>';
-				}
+// 				foreach ($testResults->phpcs->debugMessages as $message)
+// 				{
+// 					$html[] =  '<pre class="debug">'.$message.'</pre>';
+// 				}
 			}
 			else
 			{
@@ -119,14 +117,20 @@ class PullTesterFormatHtml
 					$html[] = '<ul class="phpcs">';
 
 					foreach ($testResults->phpcs->errors as $error) {
-					$html[] = '<li><tt>'.$error->file.':'.$error->line.'</tt><br />';
-					$html[] = '<em>'.$error->message.'</em></li>';
+						$html[] = '<li><tt>'.$error->file.':'.$error->line.'</tt><br />';
+						$html[] = '<em>'.$error->message.'</em></li>';
 						;
 					}
 
 					$html[] = '</ul>';
 				}
 			}
+
+			foreach ($testResults->phpcs->debugMessages as $message)
+			{
+				$html[] =  '<pre class="debug">'.$message.'</pre>';
+			}
+
 		}
 
 		$html[] = '<a href="../index.html">&lArr; Index &lArr;</a>';
@@ -161,20 +165,26 @@ class PullTesterFormatHtml
 
 		if(isset($indexData[0]))
 		{
-			$html[] = '<tr>';
+			$row = '';
+
+			$row .= '<tr>';
 
 			foreach ($indexData[0] as $key => $v)
 			{
-				$html[] = '<th>'.$key.'</th>';
+				$row .= '<th>'.$key.'</th>';
 			}
 
-			$html[] = '<th>Status</th>';
-			$html[] = '</tr>';
+			$row .= '<th>Status</th>';
+			$row .= '</tr>';
+
+			$html[] = $row;
 		}
 
 		foreach ($indexData as $entry)
 		{
-			$html[] = '<tr>';
+			$row = '';
+
+			$row .= '<tr>';
 
 			$mergeable = true;
 			$overall = 0;
@@ -220,12 +230,14 @@ class PullTesterFormatHtml
 					}//switch
 				}
 
-				$html[] = '<td>'.sprintf($replace, $value).'</td>';
+				$row .= '<td>'.sprintf($replace, $value).'</td>';
 			}//foreach
 
-			$html[] = '<td style="background-color: #'.$statusColors[$overall].'">&nbsp;</td>';
+			$row .= '<td style="background-color: #'.$statusColors[$overall].'">&nbsp;</td>';
 
-			$html[] = '</tr>';
+			$row .= '</tr>';
+
+			$html[] = $row;
 		}//foreach
 
 		$html[] = '</table>';

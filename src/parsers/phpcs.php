@@ -1,13 +1,14 @@
 <?php
 class PullTesterParserPhpCS
 {
-	public static function parse(JTable $pullTable)
+	public static function parse($debug, JTable $pullTable)
 	{
 		$result = new testResult;
 
 		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml'))
 		{
 			$result->error = 'Checkstyle analysis not found.';
+			$result->debugMessages[] = PullTesterHelper::stripLocalPaths($debug);
 
 			return;
 		}

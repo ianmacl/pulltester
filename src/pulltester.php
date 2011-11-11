@@ -62,6 +62,7 @@ class PullTester extends JCli
 	protected $verbose = false;
 
 	protected $phpUnitDebug = '';
+	protected $phpCsDebug = '';
 
 	/**
 	 * @var testResult
@@ -84,9 +85,6 @@ class PullTester extends JCli
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 
 		$this->options = new stdClass;
-
-		$this->testResults = new stdClass;
-		$this->testResults->error = '';
 
 		$this->startTime = microtime(true);
 
@@ -130,6 +128,9 @@ class PullTester extends JCli
 
 				continue;
 			}
+
+			$this->testResults = new stdClass;
+			$this->testResults->error = '';
 
 			$this->output('Processing pull '.$pull->number.'...', false);
 			$this->output(sprintf('(%d/%d)...', $cnt, count($pulls)), false);
@@ -283,7 +284,7 @@ class PullTester extends JCli
 	protected function processResults($results)
 	{
 		$this->testResults->phpunit = PullTesterParserPhpUnit::parse($this->phpUnitDebug, $this->table);
-		$this->testResults->phpcs = PullTesterParserPhpCS::parse($this->table);
+		$this->testResults->phpcs = PullTesterParserPhpCS::parse($this->phpCsDebug, $this->table);
 	}
 
 	protected function build($pull)
@@ -331,7 +332,7 @@ class PullTester extends JCli
 
 		$this->output('Running the CodeSniffer...', false);
 		// exec('ant phpcs');
-
+		ob_start();
 		echo shell_exec('phpcs'
 		.' --report=checkstyle'
 		.' --report-file='.PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
@@ -341,7 +342,7 @@ class PullTester extends JCli
 		.'build/phpcs/Joomla'
 		.' libraries/joomla'
 		.' 2>&1');
-
+		$this->phpCsDebug = ob_get_clean();
 		$this->output('OK');
 
 		//-- Fishy things happen all along the way...
@@ -406,7 +407,7 @@ class PullTester extends JCli
 		}
 
 		//-- Delete all HTML files
-		if(JFolder::exists(PATH_OUTPUT.'/test'))
+		if(JFolder::exists(PATH_OUTPUT.'/pulls'))
 		{
 			JFile::delete(JFolder::files(PATH_OUTPUT.'/pulls', '.', false, true));
 		}

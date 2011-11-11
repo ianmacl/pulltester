@@ -1,14 +1,14 @@
 <?php
 class PullTesterParserPhpUnit
 {
-	public static function parse($phpUnitDebug, JTable $pullTable)
+	public static function parse($debug, JTable $pullTable)
 	{
 		$result = new TestResult;
 
 		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/junit.xml'))
 		{
 			$result->error = 'Unit Tests log missing. Tests failed to execute.';
-			$result->debugMessages[] = PullTesterHelper::stripLocalPaths($phpUnitDebug);
+			$result->debugMessages[] = PullTesterHelper::stripLocalPaths($debug);
 
 			return $result;
 		}
@@ -30,7 +30,7 @@ class PullTesterParserPhpUnit
 			// There was an error
 			$result->error = 'Unit Tests log corrupt.';
 
-			$result->debugMessages[] = PullTesterHelper::stripLocalPaths($phpUnitDebug);
+			$result->debugMessages[] = PullTesterHelper::stripLocalPaths($debug);
 
 			foreach (libxml_get_errors() as $error)
 			{
