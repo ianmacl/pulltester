@@ -94,7 +94,7 @@ class PullTester extends JCli
 		$changed = false;
 
 		// if we haven't processed this pull request before or if new commits have been made against our repo or the head repo
-		if (!$pullData || $this->table->head != $pullRequest->head->sha || $this->table->base != $this->base) {
+		if (!$pullData || $this->table->head != $pullRequest->head->sha) {
 
 			// Step 1: See if the pull request will merge
 			// right now we do this strictly based on what github tells us
@@ -207,7 +207,6 @@ class PullTester extends JCli
 		exec('git merge ' . $pull->user->login . '/' . $pull->head->ref);
 
 		exec('ant clean');
-		exec('ant phpunit');
 		exec('ant phpunit');
 
 		exec('ant phpcs');
