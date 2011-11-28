@@ -227,15 +227,22 @@ class PullTester extends JCli
 	public function loadPull($pull)
 	{
 		$this->table = JTable::getInstance('Pulls', 'Table');
-		if (!$this->table->loadByNumber($pull->number))
+
+		if( ! $this->table->loadByNumber($pull->number))
 		{
 			$this->table->reset();
+
 			$this->table->id = 0;
 			$this->table->pull_id = $pull->number;
 			$this->table->head = $pull->head->sha;
 			$this->table->base = $pull->base->sha;
 			$this->table->mergeable = $pull->mergeable;
+			$this->table->title = $pull->title;
+			$this->table->user = $pull->user->login;
+			$this->table->avatar_url = $pull->user->avatar_url;
+
 			$this->table->store();
+
 			return false;
 		}
 
@@ -245,22 +252,16 @@ class PullTester extends JCli
 	protected function createRepo()
 	{
 		if (!file_exists(PATH_CHECKOUTS))
-		{
-			mkdir(PATH_CHECKOUTS);
-		}
+		mkdir(PATH_CHECKOUTS);
 
 		if( ! file_exists(PATH_OUTPUT))
 		throw new Exception('Invalid output directory: '.PATH_OUTPUT);
 
 		if( ! file_exists(PATH_OUTPUT.'/test/'))
-		{
-			mkdir(PATH_OUTPUT.'/test/');
-		}
+		mkdir(PATH_OUTPUT.'/test/');
 
 		if( ! file_exists(PATH_OUTPUT.'/pulls/'))
-		{
-			mkdir(PATH_OUTPUT.'/pulls/');
-		}
+		mkdir(PATH_OUTPUT.'/pulls/');
 
 		if (file_exists(PATH_CHECKOUTS . '/pulls'))
 		{
@@ -428,9 +429,9 @@ class PullTester extends JCli
 		$query->leftJoin('phpCsResults AS cs on p.id=cs.pulls_id');
 		$query->leftJoin('phpunitResults AS pu on p.id=pu.pulls_id');
 
-		$query->select('p.pull_id, p.mergeable');
+		$query->select('p.pull_id, p.user, p.mergeable');
 		$query->select('cs.warnings AS CS_warnings, cs.errors AS CS_errors');
-		$query->select('pu.failures AS Unit_failures, pu.errors AS Unit_errors');
+		$query->select('pu.failures AS UT_failures, pu.errors AS UT_errors');
 
 		$query->order('p.pull_id DESC');
 

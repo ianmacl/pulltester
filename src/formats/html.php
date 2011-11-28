@@ -20,6 +20,10 @@ class PullTesterFormatHtml
 		$html[] = '<h1>Results for <a href="https://github.com/joomla/joomla-platform/pull/'.$pullRequest->number.'">'
 		.'pull request #'.$pullRequest->number.'</a></h1>';
 
+		$html[] = '<div class="avatar"><img src="'.$pullRequest->user->avatar_url.'" /><br />'.$pullRequest->user->login.'</div>';
+		$html[] = '<p class="title">'.htmlspecialchars($pullRequest->title).'</p>';
+		$html[] = '<div class="clr"></div>';
+
 		if('staging' != $pullRequest->base->ref)
 		{
 			$html[] = '<h2 class="img24 img-fail">Pull request is not against staging!</h2>';
