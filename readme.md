@@ -1,7 +1,9 @@
 ## Ian's PullTester
-Disclaimer? This is a **personal** project not supported by or affiliated to the [Joomla! Project](http://joomla.org) or [Open Source Matters](osm.org).
+Disclaimer? This is a **personal** project **<big>!</big>** It is **not** supported by or affiliated to the [Joomla! Project](http://joomla.org) or [Open Source Matters](osm.org).
 
 The purpose of this script is running the Joomla! platform code style and unit tests against the currently open pull requests.
+
+This is based on [Ian McLennan's PullTester](https://github.com/ianmacl/pulltester). I really admire him for his innovative ideas (like this thingy).
 
 ### Requirements:
 
@@ -25,6 +27,6 @@ pulltester.php
 * ```--reset [hard]``` Reset the data. **hard** will nuke everything !
 
 * ```-v``` Verbose
-```
 
 have Fun ```=;)```
+
