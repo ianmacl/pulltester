@@ -28,8 +28,7 @@ ini_set('error_reporting', E_ALL | E_STRICT);
 /**
  * Bootstrap the Joomla! Platform.
  */
-require_once dirname(dirname(__FILE__)) . '/platform/libraries/import.php';
-// require $_SERVER['JOOMLA_PLATFORM_PATH'].'/libraries/import.php';
+require $_SERVER['JOOMLA_PLATFORM_PATH'].'/libraries/import.php';
 
 define('JPATH_BASE', dirname(__FILE__));
 define('JPATH_SITE', JPATH_BASE);
@@ -40,12 +39,13 @@ jimport('joomla.application.cli');
 jimport('joomla.database');
 jimport('joomla.database.table');
 jimport('joomla.client.github');
+jimport('joomla.filesystem.file');
 
 require 'helper.php';
-require_once 'parsers/phpunit.php';
-require_once 'parsers/phpcs.php';
-require_once 'formats/markdown.php';
-require_once 'formats/html.php';
+require 'parsers/phpunit.php';
+require 'parsers/phpcs.php';
+require 'formats/markdown.php';
+require 'formats/html.php';
 
 JError::$legacy = false;
 
@@ -61,6 +61,7 @@ class PullTester extends JCli
 	protected $verbose = false;
 
 	protected $phpUnitDebug = '';
+
 	protected $phpCsDebug = '';
 
 	/**
@@ -83,9 +84,9 @@ class PullTester extends JCli
 	{
 		$this->verbose = $this->input->get('v', 0);
 
-		$this->say('----------------------');
-		$this->say('-- Ian\'s PullTester --');
-		$this->say('----------------------');
+		$this->say('|-------------------------|');
+		$this->say('|     Ian\'s PullTester    |');
+		$this->say('|-------------------------|');
 
 		$this->setup();
 
@@ -108,13 +109,13 @@ class PullTester extends JCli
 		$this->say('OK');
 
 		$this->say('Fetching pull requests...', false);
-		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
+		$pulls = $this->github->pulls->getList($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
 		$this->say('Processing '.count($pulls).' pulls...');
 
 		JTable::getInstance('Pulls', 'Table')->update($pulls);
 
 		$cnt = 1;
-		$lapTime = $this->startTime;
+		$lapTime = microtime(true);
 
 		foreach($pulls as $pull)
 		{
@@ -166,10 +167,12 @@ class PullTester extends JCli
 		$this->startTime = microtime(true);
 		$this->options = new stdClass;
 
-		$this->github = new JGithub(
-		array('username' => $this->config->get('github_username')
+		$config = new JRegistry(array(
+		'username' => $this->config->get('github_username')
 		, 'password' => $this->config->get('github_password'))
 		);
+
+		$this->github = new JGithub($config);
 
 		define('PATH_OUTPUT', $this->config->get('targetPath'));
 
@@ -471,7 +474,7 @@ class PullTester extends JCli
 	 *
 	 * @since   11.1
 	 */
-	protected function fetchConfigurationData()
+	protected function fetchConfigurationData($file = '', $class = 'JConfig')
 	{
 		require_once $this->input->get('config', 'config.php');
 
