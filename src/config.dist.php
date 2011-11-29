@@ -8,7 +8,7 @@ class JConfig
 	public $targetPath = '';
 
 	/** Path to the Joomla! Platform Coding Standards (override) */
-	public $codeStandardsPath = '/home/elkuku/libs/joomla/build/phpcs/Joomla';
+	public $codeStandardsPath = '';
 
 	public $dbtype		= 'mysql';
 	public $host		= '127.0.0.1';
@@ -22,8 +22,8 @@ class JConfig
 	public $ftp_pass	= '';
 	public $ftp_root	= '';
 	public $ftp_enable	= 0;
-	public $tmp_path	= '/home/elkuku/eclipsespace/indigogit3/joomla-platform/tmp';
-	public $log_path	= '/home/elkuku/eclipsespace/indigogit3/joomla-platform/logs';
+	public $tmp_path	= '/tmp';
+	public $log_path	= '/logs';
 	public $mailer		= 'mail';
 	public $mailfrom	= 'admin@localhost.home';
 	public $fromname	= '';
