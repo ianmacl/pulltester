@@ -17,7 +17,7 @@ class PullTesterFormatHtml
 
 		$html[] = '<a href="../index.html">&lArr; Index &lArr;</a>';
 
-		$html[] = '<h1>Results for <a href="https://github.com/joomla/joomla-platform/pull/'.$pullRequest->number.'">'
+		$html[] = '<h1>Details for <a href="https://github.com/joomla/joomla-platform/pull/'.$pullRequest->number.'">'
 		.'Pull Request #'.$pullRequest->number.'</a></h1>';
 
 		$html[] = '<div class="avatar"><img src="'.$pullRequest->user->avatar_url.'" /><br />'.$pullRequest->user->login.'</div>';
@@ -58,7 +58,7 @@ class PullTesterFormatHtml
 				$s = sprintf('There were %1d failures and %2d errors.'
 				, count($testResults->phpunit->failures), count($testResults->phpunit->errors));
 
-				$s .= ' <a href="../logs/'.$pullRequest->number.'junit.xml">Unit Test Log</a>';
+				$s .= ' <a href="../logs/'.$pullRequest->number.'junit.xml">Unit Test Log (XML)</a>';
 
 				$html[] = '<p class="img24 '.$c.'">'.$s.'</p>';
 
@@ -108,7 +108,7 @@ class PullTesterFormatHtml
 			{
 				$s = sprintf('There were %1d warnings and %2d errors.'
 				, count($testResults->phpcs->warnings), count($testResults->phpcs->errors));
-				$s .= ' <a href="../logs/'.$pullRequest->number.'checkstyle.xml">Checkstyle Log</a>';
+				$s .= ' <a href="../logs/'.$pullRequest->number.'checkstyle.xml">Checkstyle Log (XML)</a>';
 
 				$c =($testResults->phpcs->errors) ? 'img-warn' : 'img-success';
 
@@ -176,7 +176,7 @@ class PullTesterFormatHtml
 
 		$html[] = '<body>';
 		$html[] = '<h1>Test results overview</h1>';
-		$html[] = sprintf('We have %s open pull requests...', '<b>'.count($indexData).'</b>');
+		$html[] = sprintf('There are %s open pull requests...', '<b>'.count($indexData).'</b>');
 
 		$html[] = '<table>';
 
@@ -186,7 +186,7 @@ class PullTesterFormatHtml
 
 			$row .= '<tr>';
 
-			foreach(array_keys($indexData[0]) as $key)
+			foreach($indexData[0] as $key => $pumuckl)//note to myself: indexData is an object - don't try array_keys..
 			{
 				$row .= '<th>'.$key.'</th>';
 			}
@@ -274,14 +274,11 @@ class PullTesterFormatHtml
 
 		if(file_exists(PATH_OUTPUT.'/index.html'))
 		{
+			//-- This will calculate the total time I spent on this thingy (approx..)
 			$test = file_get_contents(PATH_OUTPUT.'/index.html');
 
-			preg_match('#<span class="totalruntime">([0-9.]+)#', $test, $matches);
-
-			if($matches)
-			{
-				$totalTime += $matches[1];
-			}
+			if(preg_match('#<span class="totalruntime">([0-9.]+)#', $test, $matches))
+			$totalTime += $matches[1];
 		}
 
 		$html[] = '<div class="footer">'
