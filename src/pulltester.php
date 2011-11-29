@@ -8,7 +8,7 @@
  * --reset [hard]   Cleans tables and tatabase tables. "hard" also deletes the base repo.
  * --pull <number>  Process only a specific pull.
  *
- * -v               Be verbose.
+ * -v    Be verbose.
  *
  * @package     Joomla.Documentation
  * @subpackage  Application
@@ -29,6 +29,7 @@ ini_set('error_reporting', E_ALL | E_STRICT);
  * Bootstrap the Joomla! Platform.
  */
 require_once dirname(dirname(__FILE__)) . '/platform/libraries/import.php';
+// require $_SERVER['JOOMLA_PLATFORM_PATH'].'/libraries/import.php';
 
 define('JPATH_BASE', dirname(__FILE__));
 define('JPATH_SITE', JPATH_BASE);
@@ -39,7 +40,6 @@ jimport('joomla.application.cli');
 jimport('joomla.database');
 jimport('joomla.database.table');
 jimport('joomla.client.github');
-jimport('joomla.client.github2');
 
 require 'helper.php';
 require_once 'parsers/phpunit.php';
@@ -50,7 +50,7 @@ require_once 'formats/html.php';
 JError::$legacy = false;
 
 /**
- *
+ * Ian's PullTester
  */
 class PullTester extends JCli
 {
@@ -81,85 +81,119 @@ class PullTester extends JCli
 	 */
 	public function execute()
 	{
-		define('PATH_OUTPUT', $this->config->get('targetPath'));
+		$this->verbose = $this->input->get('v', 0);
 
-		JTable::addIncludePath(JPATH_BASE.'/tables');
+		$this->say('----------------------');
+		$this->say('-- Ian\'s PullTester --');
+		$this->say('----------------------');
 
-		$this->options = new stdClass;
+		$this->setup();
 
-		$this->startTime = microtime(true);
+		$this->say('Checkout dir :'.PATH_CHECKOUTS);
+		$this->say('Target dir   :'.PATH_OUTPUT);
 
 		$reset = $this->input->get('reset');
 
-		$this->verbose = $this->input->get('v', 0);
-
 		$selectedPull = $this->input->get('pull', 0, 'INT');
-
-		$this->output('----------------------');
-		$this->output('-- Ian\'s PullTester --');
-		$this->output('----------------------');
-
-		$this->output('Checkout dir :'.PATH_CHECKOUTS);
-		$this->output('Target dir   :'.PATH_OUTPUT);
 
 		if($reset)
 		{
-			$this->output('Resetting...', false);
+			$this->say('Resetting...', false);
 			$this->reset('hard' == $reset);
-			$this->output('OK');
+			$this->say('OK');
 		}
 
-		$this->output('Creating/Updating the base repo...', false);
-		$this->createRepo();
-		$this->output('OK');
+		$this->say('Creating/Updating the base repo...', false);
+		$this->createUpdateRepo();
+		$this->say('OK');
 
-		$this->output('Fetching pull requests...', false);
-		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
+		$this->say('Fetching pull requests...', false);
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
-		$this->output('Processing '.count($pulls).' pulls...');
+		$this->say('Processing '.count($pulls).' pulls...');
 
 		JTable::getInstance('Pulls', 'Table')->update($pulls);
 
 		$cnt = 1;
+		$lapTime = $this->startTime;
 
-		foreach ($pulls as $pull)
+		foreach($pulls as $pull)
 		{
 			if($selectedPull
 			&& $selectedPull != $pull->number)
 			{
-				$this->output('Skipping pull '.$pull->number);
+				$this->say('Skipping pull '.$pull->number);
 				$cnt ++;
 
 				continue;
 			}
 
+			$this->say('------------------------');
 			$this->testResults = new stdClass;
 			$this->testResults->error = '';
 
-			$this->output('Processing pull '.$pull->number.'...', false);
-			$this->output(sprintf('(%d/%d)...', $cnt, count($pulls)), false);
+			$this->say('Processing pull '.$pull->number.'...', false);
+			$this->say(sprintf('(%d/%d)...', $cnt, count($pulls)), false);
 
 			$forceUpdate =($selectedPull) ? true : false;
 			$this->processPull($pull, $forceUpdate);
 
-			$t = microtime(true);
+			$t = microtime(true) - $lapTime;
 
-			$this->output('Finished in '.($t - $this->startTime).' secs');
-			$this->output('------------------------');
+			$this->say('Finished in '.$t.' secs');
 
 			$cnt ++;
-		}
+			$lapTime += $t;
+		}//foreach
 
-		$this->totalTime = microtime(true) - $this->startTime;
+		$this->say('------------------------');
 
-		$this->output('Generating stats...', false);
-		$content = PullTesterFormatHtml::formatIndex($this->getIndexData(), $this->totalTime);
+		$totalTime = microtime(true) - $this->startTime;
+
+		$this->say('Generating stats...', false);
+		$content = PullTesterFormatHtml::formatIndex($this->getIndexData(), $totalTime);
 		file_put_contents(PATH_OUTPUT.'/index.html', $content);
-		$this->output('OK');
+		$this->say('OK');
 
-		$this->output('Total time: '.$this->totalTime.' secs =;)');
+		$this->say(sprintf('Total time: %s secs =;)', $totalTime));
 
 		$this->close();
+	}
+
+	protected function setup()
+	{
+		$this->say('Setup...', false);
+
+		$this->startTime = microtime(true);
+		$this->options = new stdClass;
+
+		$this->github = new JGithub(
+		array('username' => $this->config->get('github_username')
+		, 'password' => $this->config->get('github_password'))
+		);
+
+		define('PATH_OUTPUT', $this->config->get('targetPath'));
+
+		JTable::addIncludePath(JPATH_BASE.'/tables');
+
+		$this->table = JTable::getInstance('Pulls', 'Table');
+
+		$this->say('Creating base directories...', false);
+
+		if (!file_exists(PATH_CHECKOUTS))
+		mkdir(PATH_CHECKOUTS);
+
+		if( ! file_exists(PATH_OUTPUT))
+		throw new Exception('Invalid output directory: '.PATH_OUTPUT);
+
+		if( ! file_exists(PATH_OUTPUT.'/test/'))
+		mkdir(PATH_OUTPUT.'/test/');
+
+		if( ! file_exists(PATH_OUTPUT.'/pulls/'))
+		mkdir(PATH_OUTPUT.'/pulls/');
+
+		$this->say('ok');
+
+		return $this;
 	}
 
 	protected function processPull($pull, $forceUpdate = false)
@@ -169,7 +203,9 @@ class PullTester extends JCli
 		$number = $pull->number;
 
 		try {
-			$pullRequest = $this->github->pulls->get($this->config->get('github_project'), $this->config->get('github_repo'), $number);
+			$pullRequest = $this->github->pulls->get(
+			$this->config->get('github_project'), $this->config->get('github_repo'), $number
+			);
 		} catch (Exception $e) {
 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
 			return;
@@ -179,14 +215,15 @@ class PullTester extends JCli
 
 		$changed = false;
 
-		// if we haven't processed this pull request before or if new commits have been made against our repo or the head repo
+		// if we haven't processed this pull request before or if new commits have been made
+		// against our repo or the head repo
 		if ($forceUpdate
 		|| ! $pullData
 		|| $this->table->head != $pullRequest->head->sha
 		|| $this->table->base != $pullRequest->base->sha)
 		{
 			if($forceUpdate)
-			$this->output('update forced...', false);
+			$this->say('update forced...', false);
 
 			// Update the table
 			$this->table->head = $pullRequest->head->sha;
@@ -230,8 +267,6 @@ class PullTester extends JCli
 
 	public function loadPull($pull)
 	{
-		$this->table = JTable::getInstance('Pulls', 'Table');
-
 		if( ! $this->table->loadByNumber($pull->number))
 		{
 			$this->table->reset();
@@ -253,20 +288,8 @@ class PullTester extends JCli
 		return true;
 	}
 
-	protected function createRepo()
+	protected function createUpdateRepo()
 	{
-		if (!file_exists(PATH_CHECKOUTS))
-		mkdir(PATH_CHECKOUTS);
-
-		if( ! file_exists(PATH_OUTPUT))
-		throw new Exception('Invalid output directory: '.PATH_OUTPUT);
-
-		if( ! file_exists(PATH_OUTPUT.'/test/'))
-		mkdir(PATH_OUTPUT.'/test/');
-
-		if( ! file_exists(PATH_OUTPUT.'/pulls/'))
-		mkdir(PATH_OUTPUT.'/pulls/');
-
 		if (file_exists(PATH_CHECKOUTS . '/pulls'))
 		{
 			if ($this->input->get('update'))
@@ -311,11 +334,11 @@ class PullTester extends JCli
 
 		exec('git checkout -b pull'.$pull->number);
 
-		$this->output('Fetch repo: '.$pull->user->login);
+		$this->say('Fetch repo: '.$pull->user->login);
 
 		exec('git fetch ' . $pull->user->login);
 
-		$this->output('Merge repo: '.$pull->user->login . '/' . $pull->head->ref);
+		$this->say('Merge repo: '.$pull->user->login . '/' . $pull->head->ref);
 		exec('git merge ' . $pull->user->login . '/' . $pull->head->ref);
 
 		// 		exec('ant clean');
@@ -323,7 +346,7 @@ class PullTester extends JCli
 		exec('rm build/logs/junit.xml 2>/dev/null');
 		exec('touch build/logs/checkstyle.xml');
 
-		$this->output('Running PHPUnit...', false);
+		$this->say('Running PHPUnit...', false);
 
 		ob_start();
 		// exec('ant phpunit');
@@ -333,9 +356,9 @@ class PullTester extends JCli
 
 		$this->phpUnitDebug = ob_get_clean();
 
-		$this->output('OK');
+		$this->say('OK');
 
-		$this->output('Running the CodeSniffer...', false);
+		$this->say('Running CodeSniffer...', false);
 
 		$standard = $this->config->get('codeStandardsPath');
 		if( ! $standard) $standard = 'build/phpcs/Joomla';
@@ -349,7 +372,7 @@ class PullTester extends JCli
 		.' libraries/joomla'
 		.' 2>&1');
 		$this->phpCsDebug = ob_get_clean();
-		$this->output('OK');
+		$this->say('OK');
 
 		//-- Fishy things happen all along the way...
 		//-- Let's use the -f (force) option..
@@ -389,18 +412,18 @@ class PullTester extends JCli
 	{
 		jimport('joomla.filesystem.file');
 
-		$this->output('truncating tables...', false);
+		$this->say('truncating tables...', false);
 
 		JTable::getInstance('Checkstyle', 'Table')->truncate();
 		JTable::getInstance('Phpunit', 'Table')->truncate();
 		JTable::getInstance('Pulls', 'Table')->truncate();
 
-		$this->output('deleting files...', false);
+		$this->say('deleting files...', false);
 
 		//-- Remove the checkout files
 		if($hard)
 		{
-			$this->output('ALL FILES...', false);
+			$this->say('ALL FILES...', false);
 
 			if(JFolder::exists(PATH_CHECKOUTS))
 			JFolder::delete(PATH_CHECKOUTS);
@@ -436,9 +459,7 @@ class PullTester extends JCli
 
 		$db->setQuery($query);
 
-		$data = $db->loadObjectList();
-
-		return $data;
+		return $db->loadObjectList();
 	}
 
 	/**
@@ -450,28 +471,36 @@ class PullTester extends JCli
 	 *
 	 * @since   11.1
 	 */
-	protected function fetchConfigurationData($config = 'test')
+	protected function fetchConfigurationData()
 	{
-		$configFile = $this->input->get('config', 'config.php');
-		require_once $configFile;
-		if (!class_exists('JConfig'))
+		require_once $this->input->get('config', 'config.php');
+
+		if( ! class_exists('JConfig'))
 		{
 			return false;
 		}
-		$config = new JConfig;
 
-		return $config;
+		return new JConfig;
 	}
 
-	protected function output($text = '', $nl = true)
+	protected function say($text = '', $nl = true)
 	{
 		if( ! $this->verbose)
-		return;
+		{
+			return;
+		}
 
 		$this->out($text, $nl);
 	}
 }//class
 
+/**
+ * Test result class.
+ *
+ * @package     PullTester
+ * @subpackage  Helper classes
+ * @since       1.0
+ */
 class TestResult
 {
 	public $warnings = array();
