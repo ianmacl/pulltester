@@ -13,8 +13,10 @@ class PullTesterParserPhpCS
 			return;
 		}
 
-		copy(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
-		, PATH_OUTPUT.'/test/'.$pullTable->pull_id.'checkstyle.xml');
+		$contents = JFile::read(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
+		$contents = PullTesterHelper::stripLocalPaths($contents);
+
+		JFile::write(PATH_OUTPUT.'/logs/'.$pullTable->pull_id.'checkstyle.xml', $contents);
 
 		$numWarnings = 0;
 		$numErrors = 0;

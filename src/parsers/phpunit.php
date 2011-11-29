@@ -13,13 +13,17 @@ class PullTesterParserPhpUnit
 			return $result;
 		}
 
-		copy(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml', PATH_OUTPUT.'/test/'.$pullTable->pull_id.'junit.xml');
+		$contents = JFile::read(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
+		$contents = PullTesterHelper::stripLocalPaths($contents);
+
+		JFile::write(PATH_OUTPUT.'/logs/'.$pullTable->pull_id.'junit.xml', $contents);
 
 		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
 
-		//....heho infinite loop in JError...
+		//....heho infinite loop in JError... ;-((((
 		// $xml = JFactory::getXML(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
 		// do it by hand..
+
 		// Disable libxml errors and allow to fetch error information as needed
 		libxml_use_internal_errors(true);
 
