@@ -188,8 +188,8 @@ class PullTester extends JCli
 		if( ! file_exists(PATH_OUTPUT))
 		throw new Exception('Invalid output directory: '.PATH_OUTPUT);
 
-		if( ! file_exists(PATH_OUTPUT.'/test/'))
-		mkdir(PATH_OUTPUT.'/test/');
+		if( ! file_exists(PATH_OUTPUT.'/logs/'))
+		mkdir(PATH_OUTPUT.'/logs/');
 
 		if( ! file_exists(PATH_OUTPUT.'/pulls/'))
 		mkdir(PATH_OUTPUT.'/pulls/');
