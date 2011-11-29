@@ -28,7 +28,8 @@ class PullTesterFormatHtml
 		{
 			$html[] = '<p class="img24 img-fail">Pull request is not against staging !</p>';
 		}
-		elseif($testResults->error)
+
+		if($testResults->error)
 		{
 			//-- Usually this means 'not mergeable'
 			$html[] = '<p class="img24 img-fail">'.$testResults->error.'</p>';
@@ -38,22 +39,14 @@ class PullTesterFormatHtml
 			//-- PhpUnit results
 			$html[] = '<h2>Unit Tests</h2>';
 
-			if( ! isset($testResults->phpunit))
-			{
-				$markdown[] = 'Something really fishy happened while executing the unit tests - please FIXME !';
-			}
-			elseif($testResults->phpunit->error)
+			if($testResults->phpunit->error)
 			{
 				$html[] = '<h3 class="img24 img-fail">'.$testResults->phpunit->error.'</h3>';
-
-				foreach ($testResults->phpunit->debugMessages as $message)
-				{
-					$html[] =  '<pre class="debug">'.$message.'</pre>';
-				}
 			}
 			else
 			{
-				$c =($testResults->phpunit->failures || $testResults->phpunit->errors) ? 'img-warn' : 'img-success';
+				$c =($testResults->phpunit->failures || $testResults->phpunit->errors)
+				? 'img-warn' : 'img-success';
 
 				$s = sprintf('There were %1d failures and %2d errors.'
 				, count($testResults->phpunit->failures), count($testResults->phpunit->errors));
@@ -95,6 +88,11 @@ class PullTesterFormatHtml
 
 					$html[] = '</ol>';
 				}
+			}
+
+			foreach ($testResults->phpunit->debugMessages as $message)
+			{
+				$html[] =  '<pre class="debug">'.$message.'</pre>';
 			}
 
 			//-- PhpCS results
@@ -166,6 +164,9 @@ class PullTesterFormatHtml
 		$html = array();
 		$statusColors = array(0 => 'ccff99', 1 => 'ffc',2 => 'ff7f7f',3 => 'ff0033');
 
+		$repoName = 'Joomla! Platform';
+		$repoURL = 'https://github.com/joomla/joomla-platform/pulls';
+
 		$html[] = '<!doctype html>';
 		$html[] = '<html>';
 		$html[] = '<head><meta http-equiv="content-type" content="text/html; charset=UTF-8">';
@@ -176,6 +177,7 @@ class PullTesterFormatHtml
 
 		$html[] = '<body>';
 		$html[] = '<h1>Test results overview</h1>';
+		$html[] = '<h2>'.sprintf('Open Pull Requests against the %s repository', '<a href="'.$repoURL.'">'.$repoName.'</a>').'</h2>';
 		$html[] = sprintf('There are %s open pull requests...', '<b>'.count($indexData).'</b>');
 
 		$html[] = '<table>';
