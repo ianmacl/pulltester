@@ -23,7 +23,7 @@ class PullTesterFormatMarkdown
 			{
 				$markdown[] = 'Something really fishy happened while executing the unit tests - please FIXME !';
 			}
-			if($testResults->phpunit->error)
+			elseif($testResults->phpunit->error)
 			{
 				$markdown[] = $testResults->phpunit->error;
 			}
