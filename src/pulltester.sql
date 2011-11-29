@@ -17,8 +17,6 @@ CREATE TABLE IF NOT EXISTS `phpunitResults` (
   `pulls_id` int(11) NOT NULL,
   `tests` int(11) NOT NULL,
   `assertions` int(11) NOT NULL,
-  `num_failures` int(11) NOT NULL,
-  `num_errors` int(11) NOT NULL,
   `failures` int(11) NOT NULL,
   `errors` int(11) NOT NULL,
   `time` float NOT NULL,
@@ -32,5 +30,9 @@ CREATE TABLE IF NOT EXISTS `pulls` (
   `head` varchar(50) NOT NULL,
   `base` varchar(50) NOT NULL,
   `mergeable` tinyint(1) NOT NULL,
+  `user` varchar(50) NOT NULL COMMENT 'add to data ?',
+  `title` varchar(250) NOT NULL COMMENT 'add to data ?',
+  `avatar_url` varchar(250) NOT NULL COMMENT 'add to data ?',
+  `data` text NOT NULL COMMENT 'json encoded pull data from GitHub',
   PRIMARY KEY (`id`)
 ) DEFAULT CHARSET=latin1;
