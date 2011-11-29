@@ -19,7 +19,7 @@ class PullTesterFormatMarkdown
 		else
 		{
 			//-- PhpUnit results
-			if( ! isset($testResults->phpunit))
+			if( ! isset($testResults->phpunit->error))
 			{
 				$markdown[] = 'Something really fishy happened while executing the unit tests - please FIXME !';
 			}
