@@ -336,12 +336,16 @@ class PullTester extends JCli
 		$this->output('OK');
 
 		$this->output('Running the CodeSniffer...', false);
+
+		$standard = $this->config->get('codeStandardsPath');
+		if( ! $standard) $standard = 'build/phpcs/Joomla';
+
 		// exec('ant phpcs');
 		ob_start();
 		echo shell_exec('phpcs'
 		.' --report=checkstyle'
 		.' --report-file='.PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
-		.' --standard=build/phpcs/Joomla'//.$this->config->get('codeStandardsPath')
+		.' --standard='.$standard
 		.' libraries/joomla'
 		.' 2>&1');
 		$this->phpCsDebug = ob_get_clean();
