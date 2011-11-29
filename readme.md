@@ -10,17 +10,21 @@ The purpose of this script is running the Joomla! platform code style and unit t
 * The [Joomla! Platform](https://github.com/joomla/joomla-platform) (the more recent the better)
 
 ### Setup
-Edit the config.php and set the required paths.
+Edit the ```config.dist.php```, set the required paths and rename it to ```config.php```.
 
-run
+### Execute
+```cd``` to the ```src``` path and run
 
-```pulltester.php
+```
+pulltester.php
+```
 
-Optional arguments:
---update Update the repository
---reset [hard] Reset the data. **hard** will nuke everything !
+**Optional arguments:**
 
--v Verbose
+* ```--update``` Update the repository
+* ```--reset [hard]``` Reset the data. **hard** will nuke everything !
+
+* ```-v``` Verbose
 ```
 
 have Fun ```=;)```
