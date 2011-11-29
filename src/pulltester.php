@@ -32,9 +32,8 @@ require_once dirname(dirname(__FILE__)) . '/platform/libraries/import.php';
 
 define('JPATH_BASE', dirname(__FILE__));
 define('JPATH_SITE', JPATH_BASE);
-define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
 
-define('PATH_OUTPUT', '/home/elkuku/eclipsespace/indigogit3/pulltester-gh-pages');
+define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
 
 jimport('joomla.application.cli');
 jimport('joomla.database');
@@ -82,6 +81,8 @@ class PullTester extends JCli
 	 */
 	public function execute()
 	{
+		define('PATH_OUTPUT', $this->config->get('targetPath'));
+
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 
 		$this->options = new stdClass;
@@ -98,6 +99,9 @@ class PullTester extends JCli
 		$this->output('-- Ian\'s PullTester --');
 		$this->output('----------------------');
 
+		$this->output('Checkout dir :'.PATH_CHECKOUTS);
+		$this->output('Target dir   :'.PATH_OUTPUT);
+
 		if($reset)
 		{
 			$this->output('Resetting...', false);
@@ -112,7 +116,7 @@ class PullTester extends JCli
 		$this->output('Fetching pull requests...', false);
 		$this->github = new JGithub(array('username' => $this->config->get('github_username'), 'password' => $this->config->get('github_password')));
 		$pulls = $this->github->pulls->getAll($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
-		$this->output('OK');
+		$this->output('Processing '.count($pulls).' pulls...');
 
 		JTable::getInstance('Pulls', 'Table')->update($pulls);
 
@@ -298,12 +302,12 @@ class PullTester extends JCli
 			exec('git remote add ' . $pull->user->login . ' ' . $pull->head->repo->git_url);
 		}
 
-		exec('git checkout staging 2>/dev/null');
+		exec('git checkout staging &>/dev/null');
 
 		//-- Just in case, if, for any oscure reason, the branch we are trying to create already exists...
 		//-- git wont switch to it and will remain on the 'staging' branch so...
 		//-- let's first try to delete it =;)
-		exec('git branch -D pull'.$pull->number.' 2>/dev/null');
+		exec('git branch -D pull'.$pull->number.' &>/dev/null');
 
 		exec('git checkout -b pull'.$pull->number);
 
@@ -337,10 +341,7 @@ class PullTester extends JCli
 		echo shell_exec('phpcs'
 		.' --report=checkstyle'
 		.' --report-file='.PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
-		.' --standard='
-		.'/home/elkuku/libs/joomla/'
-		// .$basedir
-		.'build/phpcs/Joomla'
+		.' --standard=build/phpcs/Joomla'//.$this->config->get('codeStandardsPath')
 		.' libraries/joomla'
 		.' 2>&1');
 		$this->phpCsDebug = ob_get_clean();
@@ -348,7 +349,7 @@ class PullTester extends JCli
 
 		//-- Fishy things happen all along the way...
 		//-- Let's use the -f (force) option..
-		exec('git checkout -f staging');
+		exec('git checkout -f staging &>/dev/null');
 
 		exec('git branch -D pull' . $pull->number);
 	}
@@ -398,9 +399,7 @@ class PullTester extends JCli
 			$this->output('ALL FILES...', false);
 
 			if(JFolder::exists(PATH_CHECKOUTS))
-			{
-				JFolder::delete(PATH_CHECKOUTS);
-			}
+			JFolder::delete(PATH_CHECKOUTS);
 		}
 		else
 		{
@@ -409,14 +408,10 @@ class PullTester extends JCli
 
 		//-- Delete all HTML files
 		if(JFolder::exists(PATH_OUTPUT.'/pulls'))
-		{
-			JFile::delete(JFolder::files(PATH_OUTPUT.'/pulls', '.', false, true));
-		}
+		JFile::delete(JFolder::files(PATH_OUTPUT.'/pulls', '.', false, true));
 
-		if(JFolder::exists(PATH_OUTPUT.'/test'))
-		{
-			JFile::delete(JFolder::files(PATH_OUTPUT.'/test', '.', false, true));
-		}
+		if(JFolder::exists(PATH_OUTPUT.'/logs'))
+		JFile::delete(JFolder::files(PATH_OUTPUT.'/logs', '.', false, true));
 	}
 
 	protected function getIndexData()
