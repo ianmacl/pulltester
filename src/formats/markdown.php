@@ -1,7 +1,7 @@
 <?php
 class PullTesterFormatMarkdown
 {
-	private static $detailsUrl = 'http://elkuku.github.com/pulltester/%d.html';
+	private static $detailsUrl = 'http://elkuku.github.com/pulltester/%d';
 
 	public static function format($pullRequest, $testResults)
 	{
@@ -19,6 +19,10 @@ class PullTesterFormatMarkdown
 		else
 		{
 			//-- PhpUnit results
+			if( ! isset($testResults->phpunit))
+			{
+				$markdown[] = 'Something really fishy happened while executing the unit tests - please FIXME !';
+			}
 			if($testResults->phpunit->error)
 			{
 				$markdown[] = $testResults->phpunit->error;
