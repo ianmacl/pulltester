@@ -14,13 +14,15 @@ class PullTesterParserPhpUnit
 		}
 
 		$contents = JFile::read(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-		$contents = PullTesterHelper::stripLocalPaths($contents);
 
-		JFile::write(PATH_OUTPUT.'/logs/'.$pullTable->pull_id.'junit.xml', $contents);
+		if($contents)
+		{
+			$contents = PullTesterHelper::stripLocalPaths($contents);
 
-		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
+			JFile::write(PATH_OUTPUT.'/logs/'.$pullTable->pull_id.'junit.xml', $contents);
+		}
 
-		//....heho infinite loop in JError... ;-((((
+		//....HEHO - Infinite loop in JError... ;-((((
 		// $xml = JFactory::getXML(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
 		// do it by hand..
 
@@ -41,7 +43,7 @@ class PullTesterParserPhpUnit
 				$result->debugMessages[] = PullTesterHelper::stripLocalPaths($error->message);
 			}
 
-			return;
+			return $result;
 		}
 		else
 		{
@@ -49,9 +51,7 @@ class PullTesterParserPhpUnit
 			// var_dump($xml);
 		}
 
-		$reader = new XMLReader();
-		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-		while ($reader->read() && $reader->name !== 'testsuite');
+		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
 
 		$phpUnitTable->tests = $reader->getAttribute('tests');
 		$phpUnitTable->assertions = $reader->getAttribute('assertions');
@@ -59,7 +59,13 @@ class PullTesterParserPhpUnit
 		$phpUnitTable->errors = $reader->getAttribute('errors');
 		$phpUnitTable->time = $reader->getAttribute('time');
 		$phpUnitTable->pulls_id = $pullTable->id;
+
 		$phpUnitTable->store();
+
+		$reader = new XMLReader();
+		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
+
+		while ($reader->read() && $reader->name !== 'testsuite');
 
 		while ($reader->read())
 		{
@@ -72,8 +78,6 @@ class PullTesterParserPhpUnit
 					$s = preg_replace('#\/[A-Za-z\/]*pulls#', '', PullTesterHelper::stripLocalPaths($s));
 					$result->errors[] = $s;
 				}
-
-				// 				$errors[] = preg_replace('#\/[A-Za-z\/]*pulls#', '', $this->stripPaths($reader->readString()));
 			}
 
 			if ($reader->name == 'failure')
