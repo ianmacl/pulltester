@@ -494,7 +494,7 @@ class PullTester extends JCli
 		}
 
 		$this->out($text, $nl);
-	}
+	}//function
 }//class
 
 /**
@@ -514,7 +514,14 @@ class TestResult
 
 	public $error = '';
 	public $debugMessages = array();
-}
+
+	public function addMessage($message)
+	{
+		$this->messages[] = $message;
+
+		return $this;
+	}//function
+}//class
 
 try
 {
