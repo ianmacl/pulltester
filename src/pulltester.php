@@ -33,8 +33,6 @@ require $_SERVER['JOOMLA_PLATFORM_PATH'].'/libraries/import.php';
 define('JPATH_BASE', dirname(__FILE__));
 define('JPATH_SITE', JPATH_BASE);
 
-define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
-
 jimport('joomla.application.cli');
 jimport('joomla.database');
 jimport('joomla.database.table');
@@ -90,19 +88,9 @@ class PullTester extends JCli
 
 		$this->setup();
 
-		$this->say('Checkout dir :'.PATH_CHECKOUTS);
-		$this->say('Target dir   :'.PATH_OUTPUT);
-
-		$reset = $this->input->get('reset');
+		$this->reset();
 
 		$selectedPull = $this->input->get('pull', 0, 'INT');
-
-		if($reset)
-		{
-			$this->say('Resetting...', false);
-			$this->reset('hard' == $reset);
-			$this->say('OK');
-		}
 
 		$this->say('Creating/Updating the base repo...', false);
 		$this->createUpdateRepo();
@@ -174,11 +162,15 @@ class PullTester extends JCli
 
 		$this->github = new JGithub($config);
 
+		define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
 		define('PATH_OUTPUT', $this->config->get('targetPath'));
 
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 
 		$this->table = JTable::getInstance('Pulls', 'Table');
+
+		$this->say('Checkout dir :'.PATH_CHECKOUTS);
+		$this->say('Target dir   :'.PATH_OUTPUT);
 
 		$this->say('Creating base directories...', false);
 
@@ -413,6 +405,17 @@ class PullTester extends JCli
 
 	protected function reset($hard = false)
 	{
+		$reset = $this->input->get('reset');
+
+		if( ! $reset)
+		return;
+
+		$this->say('Resetting...', false);
+
+		$hard =('hard' == $reset);
+
+		if($hard) $this->say('HARD...', false);
+
 		jimport('joomla.filesystem.file');
 
 		$this->say('truncating tables...', false);
@@ -430,6 +433,8 @@ class PullTester extends JCli
 
 			if(JFolder::exists(PATH_CHECKOUTS))
 			JFolder::delete(PATH_CHECKOUTS);
+
+			JFolder::create(PATH_CHECKOUTS);
 		}
 		else
 		{
@@ -442,6 +447,10 @@ class PullTester extends JCli
 
 		if(JFolder::exists(PATH_OUTPUT.'/logs'))
 		JFile::delete(JFolder::files(PATH_OUTPUT.'/logs', '.', false, true));
+
+		$this->say('OK');
+
+		return true;
 	}
 
 	protected function getIndexData()
