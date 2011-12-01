@@ -75,8 +75,7 @@ class PullTesterParserPhpUnit
 
 				if($s)
 				{
-					$s = preg_replace('#\/[A-Za-z\/]*pulls#', '', PullTesterHelper::stripLocalPaths($s));
-					$result->errors[] = $s;
+					$result->errors[] = PullTesterHelper::stripLocalPaths($s);
 				}
 			}
 
@@ -86,14 +85,13 @@ class PullTesterParserPhpUnit
 
 				if($s)
 				{
-					$s = preg_replace('#\/[A-Za-z\/]*pulls#', '', PullTesterHelper::stripLocalPaths($s));
-					$result->failures[] = $s;
+					$result->failures[] = PullTesterHelper::stripLocalPaths($s);
 				}
 			}
-		}
+		}//while
 
 		$reader->close();
 
 		return $result;
-	}
-}
+	}//function
+}//class
