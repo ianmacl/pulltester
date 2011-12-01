@@ -177,7 +177,7 @@ class PullTesterFormatHtml
 
 		$html[] = '<body>';
 		$html[] = '<h1>Test results overview</h1>';
-		$html[] = '<h2>'.sprintf('Open Pull Requests against the %s repository', '<a href="'.$repoURL.'">'.$repoName.'</a>').'</h2>';
+		$html[] = '<h2>'.sprintf('Open Pull Requests for the %s', '<a href="'.$repoURL.'">'.$repoName.' Repository</a>').'</h2>';
 		$html[] = sprintf('There are %s open pull requests...', '<b>'.count($indexData).'</b>');
 
 		$html[] = '<table>';
