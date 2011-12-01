@@ -53,6 +53,11 @@ class PullTesterParserPhpUnit
 
 		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
 
+		$reader = new XMLReader;
+		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
+
+		while ($reader->read() && $reader->name !== 'testsuite');
+
 		$phpUnitTable->tests = $reader->getAttribute('tests');
 		$phpUnitTable->assertions = $reader->getAttribute('assertions');
 		$phpUnitTable->failures = $reader->getAttribute('failures');
@@ -61,11 +66,6 @@ class PullTesterParserPhpUnit
 		$phpUnitTable->pulls_id = $pullTable->id;
 
 		$phpUnitTable->store();
-
-		$reader = new XMLReader();
-		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
-
-		while ($reader->read() && $reader->name !== 'testsuite');
 
 		while ($reader->read())
 		{
