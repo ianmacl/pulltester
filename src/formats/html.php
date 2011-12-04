@@ -290,6 +290,13 @@ class PullTesterFormatHtml
 		$html[] = '<div class="myLinx"><em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/elkuku/pulltester/tree/testing1">available on GitHub</a>'
 		.' and is based on <a href="https://github.com/ianmacl/pulltester">Ian McLennan\'s PullTester</a> =;)</div>';
 		$html[] = '</div>';
+
+		$html[] = '<div class="system-specs">';
+		$html[] = shell_exec('pear version');
+		$html[] = shell_exec('phpunit --version');
+		$html[] = shell_exec('phpcs --version');
+		$html[] = '</div>';
+
 		$html[] = '</body>';
 		$html[] = '</html>';
 
