@@ -29,21 +29,26 @@ ini_set('error_reporting', E_ALL | E_STRICT);
  * Bootstrap the Joomla! Platform.
  */
 require $_SERVER['JOOMLA_PLATFORM_PATH'].'/libraries/import.php';
+//require '/home/elkuku/eclipsespace/indigogit3/joomla-platform-testing/libraries/import.php';
 
-define('JPATH_BASE', dirname(__FILE__));
-define('JPATH_SITE', JPATH_BASE);
+define('JPATH_BASE', __DIR__);
+define('JPATH_SITE', __DIR__);
 
 jimport('joomla.application.cli');
 jimport('joomla.database');
 jimport('joomla.database.table');
 jimport('joomla.client.github');
 jimport('joomla.filesystem.file');
+jimport('joomla.filesystem.folder');
 
 require 'helper.php';
 require 'parsers/phpunit.php';
 require 'parsers/phpcs.php';
 require 'formats/markdown.php';
 require 'formats/html.php';
+
+/** @todo - send a pull  to the platform =;) */
+require 'dbdrivers/sqlite.php';
 
 JError::$legacy = false;
 
@@ -80,21 +85,24 @@ class PullTester extends JCli
 	 */
 	public function execute()
 	{
+		define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
+		define('PATH_OUTPUT', $this->config->get('targetPath'));
+
 		$this->verbose = $this->input->get('v', 0);
 
 		$this->say('|-------------------------|');
 		$this->say('|     Ian\'s PullTester    |');
 		$this->say('|-------------------------|');
 
-		$this->setup();
-
 		$this->reset();
+
+		$this->setup();
 
 		$selectedPull = $this->input->get('pull', 0, 'INT');
 
 		$this->say('Creating/Updating the base repo...', false);
 		$this->createUpdateRepo();
-		$this->say('OK');
+		$this->say('ok');
 
 		$this->say('Fetching pull requests...', false);
 		$pulls = $this->github->pulls->getList($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
@@ -162,19 +170,25 @@ class PullTester extends JCli
 
 		$this->github = new JGithub($config);
 
-		define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
-		define('PATH_OUTPUT', $this->config->get('targetPath'));
-
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 
-		$this->table = JTable::getInstance('Pulls', 'Table');
+		$path = JPATH_BASE.'/db/'.$this->config->get('db');
 
+		if( ! file_exists($path))
+		{
+			$this->say('Database not found ! creating...', false);
+
+			$this->setUpDB();
+		}
+
+		$this->table = JTable::getInstance('Pulls', 'Table');
+		$this->say('ok');
 		$this->say('Checkout dir :'.PATH_CHECKOUTS);
 		$this->say('Target dir   :'.PATH_OUTPUT);
-
+// $this->say('');
 		$this->say('Creating base directories...', false);
 
-		if (!file_exists(PATH_CHECKOUTS))
+		if( ! file_exists(PATH_CHECKOUTS))
 		mkdir(PATH_CHECKOUTS);
 
 		if( ! file_exists(PATH_OUTPUT))
@@ -190,6 +204,34 @@ class PullTester extends JCli
 
 		return $this;
 	}
+
+	protected function setUpDB()
+	{
+		JFolder::create(JPATH_BASE.'/db');
+
+		$path = JPATH_BASE.'/db/'.$this->config->get('db');
+
+		$db = new PDO('sqlite:'.$path);
+
+		$sql = JFile::read(JPATH_BASE.'/pulltester.sqlite.sql');
+
+		$queries = explode(';', $sql);
+
+		foreach ($queries as $query)
+		{
+			if( ! trim($query))
+			continue;
+
+			if( ! $db->query(trim($query.';')))
+			{
+				$a = $db->errorInfo();
+				$b = $db->errorCode();
+			throw new Exception($db->errorInfo(), $db->errorCode());
+			}
+		}//foreach
+
+		return $this;
+	}//function
 
 	protected function processPull($pull, $forceUpdate = false)
 	{
@@ -262,25 +304,26 @@ class PullTester extends JCli
 
 	public function loadPull($pull)
 	{
-		if( ! $this->table->loadByNumber($pull->number))
+		if($this->table->loadByNumber($pull->number))
 		{
-			$this->table->reset();
-
-			$this->table->id = 0;
-			$this->table->pull_id = $pull->number;
-			$this->table->head = $pull->head->sha;
-			$this->table->base = $pull->base->sha;
-			$this->table->mergeable = $pull->mergeable;
-			$this->table->title = $pull->title;
-			$this->table->user = $pull->user->login;
-			$this->table->avatar_url = $pull->user->avatar_url;
-
-			$this->table->store();
-
-			return false;
+			return true;
 		}
 
-		return true;
+		$this->table->reset();
+
+		$this->table->id = null;
+		$this->table->pull_id = $pull->number;
+		$this->table->head = $pull->head->sha;
+		$this->table->base = $pull->base->sha;
+		$this->table->mergeable = $pull->mergeable;
+		$this->table->title = $pull->title;
+		$this->table->user = $pull->user->login;
+		$this->table->avatar_url = $pull->user->avatar_url;
+		$this->table->data = 'X';
+
+		$this->table->store();
+
+		return false;
 	}
 
 	protected function createUpdateRepo()
@@ -416,13 +459,23 @@ class PullTester extends JCli
 
 		if($hard) $this->say('HARD...', false);
 
-		jimport('joomla.filesystem.file');
+		if('sqlite' == $this->config->get('dbtype'))
+		{
+			// SQLite database: delete the file
+			$this->say('deleting the database file...', false);
 
-		$this->say('truncating tables...', false);
+			JFolder::delete(JPATH_BASE.'/db');
 
-		JTable::getInstance('Checkstyle', 'Table')->truncate();
-		JTable::getInstance('Phpunit', 'Table')->truncate();
-		JTable::getInstance('Pulls', 'Table')->truncate();
+			$this->setUpDB();
+		}
+		else
+		{
+			$this->say('truncating tables...', false);
+
+			JTable::getInstance('Checkstyle', 'Table')->truncate();
+			JTable::getInstance('Phpunit', 'Table')->truncate();
+			JTable::getInstance('Pulls', 'Table')->truncate();
+		}
 
 		$this->say('deleting files...', false);
 
