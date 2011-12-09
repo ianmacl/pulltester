@@ -10,11 +10,15 @@ class JConfig
 	/** Path to the Joomla! Platform Coding Standards (override) */
 	public $codeStandardsPath = '';
 
-	public $dbtype		= 'mysql';
-	public $host		= '127.0.0.1';
-	public $user		= 'root';
+	public $dbtype		= 'sqlite';
+	public $host		= '';
+	public $user		= '';
 	public $password	= '';
-	public $db			= 'pulltester';
+	public $db			= 'pulltester.sdb';
+
+	/** Custom database path (sqlite etc.) - empty for JPATH_ROOT/db */
+	public $dbpath		= '';
+
 	public $dbprefix	= '';
 	public $ftp_host	= '127.0.0.1';
 	public $ftp_port	= '21';
