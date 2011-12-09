@@ -66,7 +66,7 @@ class TablePulls extends JTable
 
 		$this->_db->setQuery($query);
 
-		$entries = $this->_db->loadResultArray();
+		$entries = $this->_db->loadColumn();
 
 		$query->clear();
 
