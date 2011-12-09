@@ -25,6 +25,7 @@ pulltester.php
 
 * ```--update``` Update the repository
 * ```--reset [hard]``` Reset the data. **hard** will nuke everything !
+* ```--pull <number>``` Process only a specific pull
 
 * ```-v``` Verbose
 
