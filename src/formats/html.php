@@ -217,36 +217,40 @@ class PullTesterFormatHtml
 					$replace = '-';
 					$overall = 3;
 				}
-				elseif('' == $value)
-				{
-					$replace = '<b class="error">? ? ?</b>';
-					$overall = 2;
-				}
 				else
 				{
-					switch($key)
+					if('mergeable' != $key
+					&& '' == $value)
 					{
-						case 'pull_id':
-							$replace = '<a href="pulls/%1$d">Pull %1$d</a>';
-							break;
+						$replace = '<b class="error">? ? ?</b>';
+						$overall = 2;
+					}
+					else
+					{
+						switch($key)
+						{
+							case 'pull_id':
+								$replace = '<a href="pulls/%1$d">Pull %1$d</a>';
+								break;
 
-						case 'mergeable':
-							$replace =($value) ? '&radic;' : '<b class="error">** NO **</b>';
-							$mergeable =($value) ? true : false;
-							break;
+							case 'mergeable':
+								$replace =($value) ? '&radic;' : '<b class="error">** NO **</b>';
+								$mergeable =($value) ? true : false;
+								break;
 
-						case 'CS_warnings':
-							$replace =(0 == $value) ? '&radic;' : '<b class="warn">%d</b>';
-							// 							$overall = 1;
-							break;
+							case 'CS_warnings':
+								$replace =(0 == $value) ? '&radic;' : '<b class="warn">%d</b>';
+								// 							$overall = 1;
+								break;
 
-						case 'CS_errors':
-						case 'UT_failures':
-						case 'UT_errors':
-							$replace =(0 == $value) ? '&radic;' : '<b class="error">%d</b>';
-							$overall =(0 == $value) ? $overall : 1;
-							break;
-					}//switch
+							case 'CS_errors':
+							case 'UT_failures':
+							case 'UT_errors':
+								$replace =(0 == $value) ? '&radic;' : '<b class="error">%d</b>';
+								$overall =(0 == $value) ? $overall : 1;
+								break;
+						}//switch
+					}
 				}
 
 				$row .= '<td>'.sprintf($replace, $value).'</td>';
