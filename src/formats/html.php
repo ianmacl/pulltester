@@ -296,9 +296,11 @@ class PullTesterFormatHtml
 		$html[] = '</div>';
 
 		$html[] = '<div class="system-specs">';
-		$html[] = shell_exec('pear version');
-		$html[] = shell_exec('phpunit --version');
-		$html[] = shell_exec('phpcs --version');
+		$html[] = shell_exec('pear version').' &bull;';
+		$html[] = shell_exec('phpunit --version').' &bull;';
+		$html[] = shell_exec('phpcs --version').' &bull;';
+		$html[] = shell_exec('/opt/lampp/bin/mysql --version').' &bull;';
+		$html[] = shell_exec('psql --version').' &bull;';
 		$html[] = '</div>';
 
 		$html[] = '</body>';
