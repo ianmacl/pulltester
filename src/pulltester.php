@@ -86,6 +86,7 @@ class PullTester extends JCli
 	public function execute()
 	{
 		define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
+		define('PATH_DBS', dirname(dirname(__FILE__)).'/dbs');
 		define('PATH_OUTPUT', $this->config->get('targetPath'));
 
 		$this->verbose = $this->input->get('v', 0);
@@ -97,6 +98,7 @@ class PullTester extends JCli
 		$this->reset();
 
 		$this->setup();
+		$this->setUpTestDBs();
 
 		$selectedPull = $this->input->get('pull', 0, 'INT');
 
@@ -105,7 +107,13 @@ class PullTester extends JCli
 		$this->say('ok');
 
 		$this->say('Fetching pull requests...', false);
-		$pulls = $this->github->pulls->getList($this->config->get('github_project'), $this->config->get('github_repo'), 'open', 0, 100);
+
+		$pulls = $this->github->pulls->getList(
+			  $this->config->get('github_project')
+			, $this->config->get('github_repo')
+			, 'open', 0, 100
+		);
+
 		$this->say('Processing '.count($pulls).' pulls...');
 
 		JTable::getInstance('Pulls', 'Table')->update($pulls);
@@ -124,7 +132,7 @@ class PullTester extends JCli
 				continue;
 			}
 
-			$this->say('------------------------');
+			$this->line();
 			$this->testResults = new stdClass;
 			$this->testResults->error = '';
 
@@ -142,18 +150,47 @@ class PullTester extends JCli
 			$lapTime += $t;
 		}//foreach
 
-		$this->say('------------------------');
+		$this->line();
+		$this->line();
 
 		$totalTime = microtime(true) - $this->startTime;
 
 		$this->say('Generating stats...', false);
 		$content = PullTesterFormatHtml::formatIndex($this->getIndexData(), $totalTime);
 		file_put_contents(PATH_OUTPUT.'/index.html', $content);
-		$this->say('OK');
+		$this->say('ok');
 
-		$this->say(sprintf('Total time: %s secs =;)', $totalTime));
+		$this->line();
+
+		$this->say(sprintf('Total time: %s secs.', $totalTime));
 
 		$this->close();
+	}
+
+	public function close($code = 0)
+	{
+		$this->line();
+
+		$this->say('Shutting down...', false);
+
+		// Shut down postgres server
+		exec('pg_ctl -D '.PATH_DBS.'/postgres/ stop', $output, $ret);
+
+		foreach ($output as $o) $this->say($o);
+
+		if($ret) $this->say('Ret: '.$ret);
+
+		$this->line();
+
+		$this->say('Finished =;)');
+
+		$this->line();
+		$this->line();
+
+		if($this->verbose)
+		exec("kdialog --msgbox 'The PullTester has finished his job'");
+
+		return parent::close($code);
 	}
 
 	protected function setup()
@@ -172,20 +209,27 @@ class PullTester extends JCli
 
 		JTable::addIncludePath(JPATH_BASE.'/tables');
 
-		$path = JPATH_BASE.'/db/'.$this->config->get('db');
-
-		if( ! file_exists($path))
+		if('sqlite' == $this->config->get('dbtype'))
 		{
-			$this->say('Database not found ! creating...', false);
+			$path = JPATH_BASE.'/db/'.$this->config->get('db');
 
-			$this->setUpDB();
+			if( ! file_exists($path))
+			{
+				$this->say('Database not found ! creating...', false);
+
+				$this->setUpDB();
+			}
 		}
 
 		$this->table = JTable::getInstance('Pulls', 'Table');
+
 		$this->say('ok');
-		$this->say('Checkout dir :'.PATH_CHECKOUTS);
-		$this->say('Target dir   :'.PATH_OUTPUT);
-// $this->say('');
+
+		$this->line();
+		$this->say('*** Checkout dir :'.PATH_CHECKOUTS);
+		$this->say('*** Target dir   :'.PATH_OUTPUT);
+		$this->line();
+
 		$this->say('Creating base directories...', false);
 
 		if( ! file_exists(PATH_CHECKOUTS))
@@ -202,7 +246,30 @@ class PullTester extends JCli
 
 		$this->say('ok');
 
+
 		return $this;
+	}
+
+	protected function setUpTestDBs()
+	{
+		$this->say('Checking test databases...', false);
+
+		$this->say('postgres...', false);
+
+		if( ! JFolder::exists(PATH_DBS.'/postgres'))
+		{
+			// Create PostreSQL db - @todo create the db
+			throw new Exception('Please create the postgres db and fill it - working on automatisation =;)');
+		}
+
+		// Start PostgreSQL server
+		exec('pg_ctl -l '.PATH_DBS.'/postgres.log -D '.PATH_DBS.'/postgres/ start & 2>&1', $output, $ret);
+
+		foreach ($output as $o) $this->say($o);
+
+		if ($ret) $this->say('Ret: '.$ret);
+
+		$this->say('ok');
 	}
 
 	protected function setUpDB()
@@ -226,7 +293,7 @@ class PullTester extends JCli
 			{
 				$a = $db->errorInfo();
 				$b = $db->errorCode();
-			throw new Exception($db->errorInfo(), $db->errorCode());
+				throw new Exception($db->errorInfo(), $db->errorCode());
 			}
 		}//foreach
 
@@ -241,7 +308,9 @@ class PullTester extends JCli
 
 		try {
 			$pullRequest = $this->github->pulls->get(
-			$this->config->get('github_project'), $this->config->get('github_repo'), $number
+				$this->config->get('github_project')
+				, $this->config->get('github_repo')
+				, $number
 			);
 		} catch (Exception $e) {
 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
@@ -528,8 +597,8 @@ class PullTester extends JCli
 	}
 
 	/**
-	 * Method to load a PHP configuration class file based on convention and return the instantiated data object.  You
-	 * will extend this method in child classes to provide configuration data from whatever data source is relevant
+	 * Method to load a PHP configuration class file based on convention and return the instantiated data object.
+	 * You will extend this method in child classes to provide configuration data from whatever data source is relevant
 	 * for your specific application.
 	 *
 	 * @return  mixed  Either an array or object to be loaded into the configuration object.
@@ -557,6 +626,11 @@ class PullTester extends JCli
 
 		$this->out($text, $nl);
 	}//function
+
+	protected function line()
+	{
+		$this->say(str_repeat('.', 70));
+	}
 }//class
 
 /**
