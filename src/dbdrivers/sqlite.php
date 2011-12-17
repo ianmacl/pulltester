@@ -133,20 +133,15 @@ class JDatabaseSQLite extends JDatabase
 	{
 		;
 	}
-	public function renameTable($oldTable, $prefix = null, $backup = null, $newTable)
+	public function renameTable($oldTable, $newTable, $backup = null, $prefix = null)
 	{
 		;
 	}
 
-	public function lock($table)
-	{
-		;
-	}
-
-	public function unlock()
-	{
-		;
-	}
+	public function lock($table){}
+	public function unlockTables()	{}
+	public function lockTable($tableName){}
+	public function unlock(){}
 
 	/**
 	 * Destructor.
