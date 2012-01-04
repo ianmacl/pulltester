@@ -570,12 +570,12 @@ class JDatabaseSQLite extends JDatabase
 		*
 		* @return  string  The quote wrapped name.
 		*
-		* @since   11.1
+		* @since   ¿
 		*/
-	public function quoteName($name)
+	public function quoteName($name, $as = null)
 	{
 		// SQLite does not use quotes
-		return $name;
+		return (null == $as) ? $name : $name.' AS '.$as;
 	}
 
 	/**
