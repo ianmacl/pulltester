@@ -141,7 +141,7 @@ class PullTesterFormatHtml
 		$html[] = '<div class="footer">Generated on '.date('d-M-Y H:i P T e');
 
 		$html[] = '<div class="myLinx"><em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/elkuku/pulltester/tree/testing1">available on GitHub</a>'
-		.' and is based on <a href="https://github.com/ianmacl/pulltester">Ian McLennan\'s PullTester</a> =;)</div>';
+		.', based on <a href="https://github.com/ianmacl/pulltester">Ian McLennan\'s PullTester</a> =;)</div>';
 		$html[] = '</div>';
 		$html[] = '</body>';
 		$html[] = '</html>';
