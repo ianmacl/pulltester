@@ -1,5 +1,5 @@
 <?php
-//test2
+//test3
 class PullTesterHelper
 {
 	public static function stripLocalPaths($dirtyPath)
