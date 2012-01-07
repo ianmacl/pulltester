@@ -101,11 +101,17 @@ class PullTesterFormatHtml
 			if($testResults->phpcs->error)
 			{
 				$html[] = '<h3 class="img24 img-fail">'.$testResults->phpcs->error.'</h3>';
+
+				foreach ($testResults->phpcs->debugMessages as $message)
+				{
+					$html[] =  '<pre class="debug">'.$message.'</pre>';
+				}
 			}
 			else
 			{
 				$s = sprintf('There were %1d warnings and %2d errors.'
 				, count($testResults->phpcs->warnings), count($testResults->phpcs->errors));
+
 				$s .= ' <a href="../logs/'.$pullRequest->number.'checkstyle.xml">Checkstyle Log (XML)</a>';
 
 				$c =($testResults->phpcs->errors) ? 'img-warn' : 'img-success';

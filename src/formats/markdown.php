@@ -33,9 +33,16 @@ class PullTesterFormatMarkdown
 				, count($testResults->phpunit->failures), count($testResults->phpunit->errors));
 			}
 
-			//-- PhpCS results
-			$markdown[] = sprintf('Checkstyle analysis reported %1d warnings and %2d errors.'
-			, count($testResults->phpcs->warnings), count($testResults->phpcs->errors));
+			if($testResults->phpcs->error)
+			{
+				$html[] = '<h3 class="img24 img-fail">'.$testResults->phpcs->error.'</h3>';
+			}
+			else
+			{
+				//-- PhpCS results
+				$markdown[] = sprintf('Checkstyle analysis reported %1d warnings and %2d errors.'
+				, count($testResults->phpcs->warnings), count($testResults->phpcs->errors));
+			}
 
 			//-- Details link..
 			$markdown[] = '';
