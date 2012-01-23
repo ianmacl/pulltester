@@ -4,13 +4,14 @@ class PullTesterParserPhpCS
 	public static function parse($debug, JTable $pullTable)
 	{
 		$result = new testResult;
+		$path = PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml';
 
-		if ( ! file_exists(PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml'))
+		if ( ! file_exists($path) || filesize($path) < 1)
 		{
 			$result->error = 'Checkstyle analysis not found.';
 			$result->debugMessages[] = PullTesterHelper::stripLocalPaths($debug);
 
-			return;
+			return $result;
 		}
 
 		$contents = JFile::read(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
@@ -18,13 +19,7 @@ class PullTesterParserPhpCS
 
 		JFile::write(PATH_OUTPUT.'/logs/'.$pullTable->pull_id.'checkstyle.xml', $contents);
 
-		$numWarnings = 0;
-		$numErrors = 0;
-
-		$warnings = array();
-		$errors = array();
-
-		$reader = new XMLReader();
+		$reader = new XMLReader;
 		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
 
 		while ($reader->read())
