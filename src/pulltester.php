@@ -55,7 +55,7 @@ JError::$legacy = false;
 /**
  * Ian's PullTester
  */
-class PullTester extends JCli
+class PullTester extends JApplicationCli
 {
 	protected $github = null;
 
@@ -100,7 +100,9 @@ class PullTester extends JCli
 		$this->setup();
 		$this->setUpTestDBs();
 
-		$selectedPull = $this->input->get('pull', 0, 'INT');
+
+		$selectedPulls = $this->input->get('pull', '', 'HTML');
+		$selectedPulls =($selectedPulls) ? explode(',', $selectedPulls) : array();
 
 		$this->say('Creating/Updating the base repo...', false);
 		$this->createUpdateRepo();
@@ -123,8 +125,8 @@ class PullTester extends JCli
 
 		foreach($pulls as $pull)
 		{
-			if($selectedPull
-			&& $selectedPull != $pull->number)
+			if($selectedPulls
+			&& ! in_array($pull->number, $selectedPulls))
 			{
 				$this->say('Skipping pull '.$pull->number);
 				$cnt ++;
@@ -139,7 +141,7 @@ class PullTester extends JCli
 			$this->say('Processing pull '.$pull->number.'...', false);
 			$this->say(sprintf('(%d/%d)...', $cnt, count($pulls)), false);
 
-			$forceUpdate =($selectedPull) ? true : false;
+			$forceUpdate =($selectedPulls) ? true : false;
 			$this->processPull($pull, $forceUpdate);
 
 			$t = microtime(true) - $lapTime;
@@ -259,7 +261,7 @@ class PullTester extends JCli
 		if( ! JFolder::exists(PATH_DBS.'/postgres'))
 		{
 			// Create PostreSQL db - @todo create the db
-			throw new Exception('Please create the postgres db and fill it - working on automatisation =;)');
+//			throw new Exception('Please create the postgres db and fill it - working on automatisation =;)');
 		}
 
 		// Start PostgreSQL server
@@ -280,7 +282,7 @@ class PullTester extends JCli
 
 		$db = new PDO('sqlite:'.$path);
 
-		$sql = JFile::read(JPATH_BASE.'/pulltester.sqlite.sql');
+		$sql = JFile::read(JPATH_BASE.'/sql/pulltester.sqlite.sql');
 
 		$queries = explode(';', $sql);
 
@@ -334,7 +336,7 @@ class PullTester extends JCli
 			// Update the table
 			$this->table->head = $pullRequest->head->sha;
 			$this->table->base = $pullRequest->base->sha;
-			$this->table->mergeable = $pullRequest->mergeable;
+			$this->table->mergeable =($pullRequest->mergeable) ? 1 : 0;
 
 			$this->table->store();
 
@@ -432,7 +434,7 @@ class PullTester extends JCli
 			exec('git remote add ' . $pull->user->login . ' ' . $pull->head->repo->git_url);
 		}
 
-		exec('git checkout staging &>/dev/null');
+		exec('git checkout master &>/dev/null');
 
 		//-- Just in case, if, for any oscure reason, the branch we are trying to create already exists...
 		//-- git wont switch to it and will remain on the 'staging' branch so...
@@ -456,8 +458,6 @@ class PullTester extends JCli
 		$this->say('Running PHPUnit...', false);
 
 		ob_start();
-		// exec('ant phpunit');
-		// exec('ant phpunit');
 
 		echo shell_exec('phpunit 2>&1');
 
@@ -470,20 +470,21 @@ class PullTester extends JCli
 		$standard = $this->config->get('codeStandardsPath');
 		if( ! $standard) $standard = 'build/phpcs/Joomla';
 
-		// exec('ant phpcs');
 		ob_start();
+
 		echo shell_exec('phpcs'
 		.' --report=checkstyle'
 		.' --report-file='.PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'
 		.' --standard='.$standard
-		.' libraries/joomla'
+		.' libraries/joomla libraries/platform.php libraries/loader.php libraries/import.php'
 		.' 2>&1');
+
 		$this->phpCsDebug = ob_get_clean();
 		$this->say('OK');
 
 		//-- Fishy things happen all along the way...
 		//-- Let's use the -f (force) option..
-		exec('git checkout -f staging &>/dev/null');
+		exec('git checkout -f master &>/dev/null');
 
 		exec('git branch -D pull' . $pull->number);
 	}
@@ -491,31 +492,16 @@ class PullTester extends JCli
 	protected function publishResults($pullRequest)
 	{
 
-		$project = $this->config->get('github_project');
-		$repo = $this->config->get('github_repo');
-		//$url = 'https://api.github.com/repos/'.$project.'/'.$repo.'/issues/'.$pullRequest->number.'/comments';
-		//$ch = curl_init();
-		//curl_setopt($ch, CURLOPT_URL, $url);
-		//curl_setopt($ch, CURLOPT_POST, true);
-		//curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-		//curl_setopt($ch, CURLOPT_USERPWD, $this->config->get('github_user').':'.$this->config->get('github_password'));
-
-		//$request = new stdClass;
-		//$request->body = '';
-
-		//curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-		//curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($request));
-
 		$report = PullTesterFormatMarkdown::format($pullRequest, $this->testResults);
-		file_put_contents(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.test.txt', $report);
+		JFile::write(PATH_CHECKOUTS . '/pull' . $pullRequest->number . '.test.txt', $report);
 
 		$report = PullTesterFormatHtml::format($pullRequest, $this->testResults);
-		file_put_contents(PATH_OUTPUT . '/pulls/' . $pullRequest->number . '.html', $report);
+		JFile::write(PATH_OUTPUT . '/pulls/' . $pullRequest->number . '.html', $report);
 
 		//echo $this->report;
 	}
 
-	protected function reset($hard = false)
+	protected function reset()
 	{
 		$reset = $this->input->get('reset');
 
@@ -662,7 +648,7 @@ class TestResult
 try
 {
 	// Execute the application.
-	JCli::getInstance('PullTester')->execute();
+	JApplicationCli::getInstance('PullTester')->execute();
 
 	exit(0);
 }
