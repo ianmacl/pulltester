@@ -3,7 +3,7 @@ class PullTesterParserPhpCS
 {
 	public static function parse($debug, JTable $pullTable)
 	{
-		$result = new testResult;
+		$result = new TestResult;
 		$path = PATH_CHECKOUTS . '/pulls/build/logs/checkstyle.xml';
 
 		if ( ! file_exists($path) || filesize($path) < 1)
@@ -14,8 +14,7 @@ class PullTesterParserPhpCS
 			return $result;
 		}
 
-		$contents = JFile::read(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml');
-		$contents = PullTesterHelper::stripLocalPaths($contents);
+		$contents = PullTesterHelper::stripLocalPaths(JFile::read(PATH_CHECKOUTS.'/pulls/build/logs/checkstyle.xml'));
 
 		JFile::write(PATH_OUTPUT.'/logs/'.$pullTable->pull_id.'checkstyle.xml', $contents);
 
@@ -58,12 +57,12 @@ class PullTesterParserPhpCS
 
 		$reader->close();
 
-		$phpCsTable = JTable::getInstance('Checkstyle', 'Table');
-		$phpCsTable->errors = count($result->errors);
-		$phpCsTable->warnings = count($result->warnings);
-		$phpCsTable->pulls_id = $pullTable->id;
+		$table = JTable::getInstance('Checkstyle', 'Table');
+		$table->errors = count($result->errors);
+		$table->warnings = count($result->warnings);
+		$table->pulls_id = $pullTable->id;
 
-		$phpCsTable->store();
+		$table->store();
 
 		return $result;
 	}

@@ -48,24 +48,23 @@ class PullTesterParserPhpUnit
 		else
 		{
 			//-- @TODO use simple_xml to parse xml files..
-			// var_dump($xml);
 		}
 
-		$phpUnitTable = JTable::getInstance('Phpunit', 'Table');
+		$table = JTable::getInstance('Phpunit', 'Table');
 
 		$reader = new XMLReader;
 		$reader->open(PATH_CHECKOUTS.'/pulls/build/logs/junit.xml');
 
 		while ($reader->read() && $reader->name !== 'testsuite');
 
-		$phpUnitTable->tests = $reader->getAttribute('tests');
-		$phpUnitTable->assertions = $reader->getAttribute('assertions');
-		$phpUnitTable->failures = $reader->getAttribute('failures');
-		$phpUnitTable->errors = $reader->getAttribute('errors');
-		$phpUnitTable->time = $reader->getAttribute('time');
-		$phpUnitTable->pulls_id = $pullTable->id;
+		$table->tests = $reader->getAttribute('tests');
+		$table->assertions = $reader->getAttribute('assertions');
+		$table->failures = $reader->getAttribute('failures');
+		$table->errors = $reader->getAttribute('errors');
+		$table->time = $reader->getAttribute('time');
+		$table->pulls_id = $pullTable->id;
 
-		$phpUnitTable->store();
+		$table->store();
 
 		while ($reader->read())
 		{
