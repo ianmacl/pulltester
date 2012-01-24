@@ -405,9 +405,9 @@ class PullTester extends JApplicationCli
 			{
 				//-- Update existing repository
 				chdir(PATH_CHECKOUTS.'/pulls');
-				exec('git checkout staging');
+				exec('git checkout master &>/dev/null');
 				exec('git fetch origin');
-				exec('git merge origin/staging');
+				exec('git merge origin/master');
 			}
 		}
 		else
@@ -437,7 +437,7 @@ class PullTester extends JApplicationCli
 		exec('git checkout master &>/dev/null');
 
 		//-- Just in case, if, for any oscure reason, the branch we are trying to create already exists...
-		//-- git wont switch to it and will remain on the 'staging' branch so...
+		//-- git wont switch to it and will remain on the 'master' branch so...
 		//-- let's first try to delete it =;)
 		exec('git branch -D pull'.$pull->number.' &>/dev/null');
 
