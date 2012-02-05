@@ -128,7 +128,7 @@ class PullTesterFormatHtml
 				{
 					$html[] = '<h3>Warnings</h3>';
 					$html[] = sprintf(
-						'Currently there are %d expected warnings - If your number differs, please check the log'
+						'<p>Currently there are %d expected warnings - If your number differs, please check the log.</p>'
 						, self::$expectedPhpCsWarnings
 					);
 

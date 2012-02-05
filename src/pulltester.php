@@ -13,31 +13,26 @@
  * @package     Joomla.Documentation
  * @subpackage  Application
  *
- * @copyright   Copyright (C) 2005 - 2011 Open Source Matters, Inc. All rights reserved.
+ * @copyright   Copyright (C) 2005 - 2012 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
  */
 
+'cli' == PHP_SAPI || die('This script must be executed from the command line.');
+
+version_compare(PHP_VERSION, '5.3', '>=') || die('This script requires PHP >= 5.3');
+
 define('_JEXEC', 1);
 
-/**
- * Turn on strict error reporting during development
- */
-ini_set('display_errors', '1');
-ini_set('error_reporting', E_ALL | E_STRICT);
+error_reporting(-1);
 
 /**
  * Bootstrap the Joomla! Platform.
  */
-require $_SERVER['JOOMLA_PLATFORM_PATH'].'/libraries/import.php';
-//require '/home/elkuku/eclipsespace/indigogit3/joomla-platform-testing/libraries/import.php';
+require getenv('JOOMLA_PLATFORM_PATH').'/libraries/import.php';
 
 define('JPATH_BASE', __DIR__);
 define('JPATH_SITE', __DIR__);
 
-jimport('joomla.application.cli');
-jimport('joomla.database');
-jimport('joomla.database.table');
-jimport('joomla.client.github');
 jimport('joomla.filesystem.file');
 jimport('joomla.filesystem.folder');
 
@@ -47,7 +42,6 @@ require 'parsers/phpcs.php';
 require 'formats/markdown.php';
 require 'formats/html.php';
 
-/** @todo - send a pull  to the platform =;) */
 require 'dbdrivers/sqlite.php';
 
 JError::$legacy = false;
@@ -264,7 +258,7 @@ class PullTester extends JApplicationCli
 //			throw new Exception('Please create the postgres db and fill it - working on automatisation =;)');
 		}
 
-		// Start PostgreSQL server
+		// Start the PostgreSQL server
 		exec('pg_ctl -l '.PATH_DBS.'/postgres.log -D '.PATH_DBS.'/postgres/ start & 2>&1', $output, $ret);
 
 		foreach ($output as $o) $this->say($o);
@@ -308,13 +302,16 @@ class PullTester extends JApplicationCli
 
 		$number = $pull->number;
 
-		try {
+		try
+		{
 			$pullRequest = $this->github->pulls->get(
 				$this->config->get('github_project')
 				, $this->config->get('github_repo')
 				, $number
 			);
-		} catch (Exception $e) {
+		}
+		catch (Exception $e)
+		{
 			echo 'Error Getting Pull Request - JSON Error: '.$e->getMessage."\n";
 			return;
 		}
@@ -586,6 +583,9 @@ class PullTester extends JApplicationCli
 	 * Method to load a PHP configuration class file based on convention and return the instantiated data object.
 	 * You will extend this method in child classes to provide configuration data from whatever data source is relevant
 	 * for your specific application.
+	 *
+	 * @param string $file
+	 * @param string $class
 	 *
 	 * @return  mixed  Either an array or object to be loaded into the configuration object.
 	 *
