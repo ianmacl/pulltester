@@ -23,12 +23,12 @@ version_compare(PHP_VERSION, '5.3', '>=') || die('This script requires PHP >= 5.
 
 define('_JEXEC', 1);
 
-error_reporting(-1);
+error_reporting(E_ALL);
 
 /**
  * Bootstrap the Joomla! Platform.
  */
-require getenv('JOOMLA_PLATFORM_PATH').'/libraries/import.php';
+require getenv('JOOMLA_PLATFORM_PATH').'/libraries/import.legacy.php';
 
 define('JPATH_BASE', __DIR__);
 define('JPATH_SITE', __DIR__);
@@ -207,7 +207,7 @@ class PullTester extends JApplicationCli
 
 		if('sqlite' == $this->config->get('dbtype'))
 		{
-			$path = JPATH_BASE.'/db/'.$this->config->get('db');
+			$path = $this->config->get('db');
 
 			if( ! file_exists($path))
 			{
@@ -216,7 +216,6 @@ class PullTester extends JApplicationCli
 				$this->setUpDB();
 			}
 		}
-
 		$this->table = JTable::getInstance('Pulls', 'Table');
 
 		$this->say('ok');
@@ -272,7 +271,7 @@ class PullTester extends JApplicationCli
 	{
 		JFolder::create(JPATH_BASE.'/db');
 
-		$path = JPATH_BASE.'/db/'.$this->config->get('db');
+		$path = $this->config->get('db');
 
 		$db = new PDO('sqlite:'.$path);
 
@@ -285,12 +284,13 @@ class PullTester extends JApplicationCli
 			if( ! trim($query))
 			continue;
 
-			if( ! $db->query(trim($query.';')))
+			if( ! $db->query(trim($query.'')))
 			{
 				$a = $db->errorInfo();
 				$b = $db->errorCode();
 				throw new Exception($db->errorInfo(), $db->errorCode());
 			}
+
 		}//foreach
 
 		return $this;
