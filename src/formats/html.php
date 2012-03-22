@@ -1,7 +1,7 @@
 <?php
 class PullTesterFormatHtml
 {
-	private static $expectedPhpCsWarnings = 165;
+	private static $expectedPhpCsWarnings = 163;
 
 	public static function format($pullRequest, $testResults)
 	{
@@ -161,8 +161,8 @@ class PullTesterFormatHtml
 
 		$html[] = '<div class="footer">Generated on ' . date('d-M-Y H:i P T e');
 
-		$html[] = '<div class="myLinx"><em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/elkuku/pulltester/tree/testing1">available on GitHub</a>'
-			. ', based on <a href="https://github.com/ianmacl/pulltester">Ian McLennan\'s PullTester</a> =;)</div>';
+		$html[] = '<div class="myLinx"><em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/ianmacl/pulltester/tree/elkuku">available on GitHub</a>'
+			. ', based on <a href="https://github.com/ianmacl/pulltester">Ian MacLennan\'s PullTester</a> with signifiant enhancements by <a href="https://github.com/elkuku/pulltester">Nikolai Plath</a>.</div>';
 		$html[] = '</div>';
 		$html[] = '</body>';
 		$html[] = '</html>';
@@ -313,23 +313,19 @@ class PullTesterFormatHtml
 				$totalTime += $matches[1];
 		}
 
-		$html[] = '<div class="legal-note">';
-		$html[] = '<strong>Please note</strong> that this project is not affiliated with or endorsed by the <a href="http://joomla.org">Joomla! Project</a>. It is not supported or warranted by the <a href="http://joomla.org">Joomla! Project</a> or <a href="http://opensourcematters.org/">Open Source Matters</a>.';
-		$html[] = '</div>';
-
 		$html[] = '<div class="footer">'
 			. 'Generated on ' . date('d-M-Y H:i P T e')
 			. '<br /><small><small>C\'mon, I spent <span class="totalruntime">' . $totalTime . '</span> seconds generating this pages (excluding tests).... </small></small>'
 			. '<span class="havefun">have Fun</span> =;)<br />'
-			. '<em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/elkuku/pulltester/tree/testing1">available on GitHub</a>,'
-			. ' based on <a href="https://github.com/ianmacl/pulltester">Ian McLennan\'s PullTester</a>s'
+			. '<em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/ianmacl/pulltester/tree/elkuku">available on GitHub</a>,'
+			. ', based on <a href="https://github.com/ianmacl/pulltester">Ian MacLennan\'s PullTester</a> with signifiant enhancements by <a href="https://github.com/elkuku/pulltester">Nikolai Plath</a>.';
 			. '</div>';
 
 		$html[] = '<div class="system-specs">';
 		$html[] = shell_exec('pear version') . ' &bull;';
 		$html[] = shell_exec('phpunit --version') . ' &bull;';
 		$html[] = shell_exec('phpcs --version') . ' &bull;';
-		$html[] = shell_exec('/opt/lampp/bin/mysql --version') . ' &bull;';
+		$html[] = shell_exec('mysql --version') . ' &bull;';
 		$html[] = shell_exec('psql --version') . ' &bull;';
 		$html[] = '</div>';
 
