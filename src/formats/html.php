@@ -256,7 +256,7 @@ class PullTesterFormatHtml
 						switch ($key)
 						{
 							case 'pull_id':
-								$replace = '<a href="pulls/%1$d">Pull %1$d</a>';
+								$replace = '<a href="pulls/%1$d.html">Pull %1$d</a>';
 								break;
 
 							case 'mergeable':
@@ -318,7 +318,7 @@ class PullTesterFormatHtml
 			. '<br /><small><small>C\'mon, I spent <span class="totalruntime">' . $totalTime . '</span> seconds generating this pages (excluding tests).... </small></small>'
 			. '<span class="havefun">have Fun</span> =;)<br />'
 			. '<em>BTW</em>: If you want to run this tests on your own machine - The source code is <a href="https://github.com/ianmacl/pulltester/tree/elkuku">available on GitHub</a>,'
-			. ', based on <a href="https://github.com/ianmacl/pulltester">Ian MacLennan\'s PullTester</a> with signifiant enhancements by <a href="https://github.com/elkuku/pulltester">Nikolai Plath</a>.';
+			. ', based on <a href="https://github.com/ianmacl/pulltester">Ian MacLennan\'s PullTester</a> with signifiant enhancements by <a href="https://github.com/elkuku/pulltester">Nikolai Plath</a>.'
 			. '</div>';
 
 		$html[] = '<div class="system-specs">';
