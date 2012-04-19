@@ -11,8 +11,9 @@ class PullTesterFormatHtml
 		$html[] = '<html>';
 		$html[] = '<head><meta http-equiv="content-type" content="text/html; charset=UTF-8">';
 		$html[] = '<title>' . $pullRequest->number . ' Test results' . '</title>';
-		$html[] = '<link href="../assets/css/style.css" rel="stylesheet" type="text/css" />';
-		$html[] = '<link href="../favicon.ico" rel="icon" type="image/x-icon" />';
+		$html[] = '<link href="assets/css/bootstrap.min.css" rel="stylesheet" type="text/css" />';
+		$html[] = '<link href="assets/css/bootstrap-responsive.min.css" rel="stylesheet" type="text/css" />';
+		$html[] = '<link href="assets/img/favicon.ico" rel="icon" type="image/x-icon" />';
 		$html[] = '</head>';
 
 		$html[] = '<!--                      N O T E                   -->';
@@ -21,33 +22,33 @@ class PullTesterFormatHtml
 
 		$html[] = '<body>';
 
-		$html[] = '<a href="../index.html">&lArr; Index &lArr;</a>';
+		$html[] = '<a href="../index.html" class="btn btn-small"><i class="icon-left-chevron"></i> Back to Overview</a>';
 
-		$html[] = '<h1>Details for <a href="https://github.com/joomla/joomla-platform/pull/' . $pullRequest->number . '">'
-			. 'Pull Request #' . $pullRequest->number . '</a></h1>';
+		$html[] = '<h1>Details for <small><a href="https://github.com/joomla/joomla-platform/pull/' . $pullRequest->number . '">'
+			. 'Pull Request #' . $pullRequest->number . '</a></small></h1>';
 
-		$html[] = '<div class="avatar"><img alt="avatar" src="' . $pullRequest->user->avatar_url . '" /><br />' . $pullRequest->user->login . '</div>';
+		$html[] = '<div class="avatar"><img class="thumbnail" alt="avatar" src="' . $pullRequest->user->avatar_url . '" /><br />' . $pullRequest->user->login . '</div>';
 		$html[] = '<p class="title">' . htmlspecialchars($pullRequest->title) . '</p>';
-		$html[] = '<div class="clr"></div>';
+		$html[] = '<div class="clearfix"></div>';
 
 		if ('staging' != $pullRequest->base->ref)
 		{
-			$html[] = '<p class="img24 img-fail">Pull request is not against staging !</p>';
+			$html[] = '<div class="alert alert-error">Pull request is not against staging !</div>';
 		}
 
 		if ($testResults->error)
 		{
 			//-- Usually this means 'not mergeable'
-			$html[] = '<p class="img24 img-fail">' . $testResults->error . '</p>';
+			$html[] = '<div class="alert alert-error">' . $testResults->error . '</div>';
 		}
 		else
 		{
 			//-- PhpUnit results
-			$html[] = '<h2>Unit Tests</h2>';
+			$html[] = '<div class="page-header"><h3>Unit Tests</h3></div>';
 
 			if ($testResults->phpunit->error)
 			{
-				$html[] = '<h3 class="img24 img-fail">' . $testResults->phpunit->error . '</h3>';
+				$html[] = '<div class="alert alert-error">' . $testResults->phpunit->error . '</div>';
 			}
 			else
 			{
@@ -102,11 +103,11 @@ class PullTesterFormatHtml
 			}
 
 			//-- PhpCS results
-			$html[] = '<h2>Checkstyle</h2>';
+			$html[] = '<div class="page-header"><h3>Checkstyle</h3></div>';
 
 			if ($testResults->phpcs->error)
 			{
-				$html[] = '<h3 class="img24 img-fail">' . $testResults->phpcs->error . '</h3>';
+				$html[] = '<div class="alert alert-error">' . $testResults->phpcs->error . '</div>';
 
 				foreach ($testResults->phpcs->debugMessages as $message)
 				{
@@ -126,9 +127,9 @@ class PullTesterFormatHtml
 
 				if ($testResults->phpcs->warnings)
 				{
-					$html[] = '<h3>Warnings</h3>';
+					$html[] = '<div class="page-header"><h3>Warnings</h3></div>';
 					$html[] = sprintf(
-						'<p>Currently there are %d expected warnings - If your number differs, please check the log.</p>'
+						'<p>Currently there are <span class="badge badge-warning">%d</span> expected warnings - If your number differs, please check the log.</p>'
 						, self::$expectedPhpCsWarnings
 					);
 
@@ -137,7 +138,9 @@ class PullTesterFormatHtml
 
 				if ($testResults->phpcs->errors)
 				{
-					$html[] = '<h3>Errors</h3>';
+					$html[] = '<div class="page-header"><h3>Errors</h3></div>';
+					
+					$html[] = '<div class="well">';
 
 					$html[] = '<ul class="phpcs">';
 
@@ -148,6 +151,8 @@ class PullTesterFormatHtml
 					}
 
 					$html[] = '</ul>';
+					
+					$html[] = '</div>';
 				}
 			}
 
@@ -183,7 +188,7 @@ class PullTesterFormatHtml
 	public static function formatIndex($indexData, $totalTime)
 	{
 		$html = array();
-		$statusColors = array(0 => 'ccff99', 1 => 'ffc', 2 => 'ff7f7f', 3 => 'ff0033');
+		$statusClass = array(0 => 'success', 1 => 'info', 2 => 'warning', 3 => 'important');
 
 		$repoName = 'Joomla! Platform';
 		$repoURL = 'https://github.com/joomla/joomla-platform/pulls';
@@ -192,8 +197,9 @@ class PullTesterFormatHtml
 		$html[] = '<html>';
 		$html[] = '<head><meta http-equiv="content-type" content="text/html; charset=UTF-8">';
 		$html[] = '<title>Test results overview</title>';
-		$html[] = '<link href="assets/css/style.css" rel="stylesheet" type="text/css" />';
-		$html[] = '<link href="favicon.ico" rel="icon" type="image/x-icon" />';
+		$html[] = '<link href="assets/css/bootstrap.min.css" rel="stylesheet" type="text/css" />';
+		$html[] = '<link href="assets/css/bootstrap-responsive.min.css" rel="stylesheet" type="text/css" />';
+		$html[] = '<link href="assets/img/favicon.ico" rel="icon" type="image/x-icon" />';
 		$html[] = '</head>';
 
 
@@ -202,14 +208,17 @@ class PullTesterFormatHtml
 		$html[] = '<!--   To change it - please modify the PHP code    -->';
 		$html[] = '<body>';
 		$html[] = '<h1>Test results overview</h1>';
-		$html[] = '<h2>' . sprintf('Open Pull Requests for the %s', '<a href="' . $repoURL . '">' . $repoName . ' Repository</a>') . '</h2>';
-		$html[] = sprintf('There are %s open pull requests...', '<b>' . count($indexData) . '</b>');
+		$html[] = '<h2>' . sprintf('Open Pull Requests for the %s', '<small><a href="' . $repoURL . '">' . $repoName . ' Repository</a></small>') . '</h2>';
+		$html[] = sprintf('There are <span class="badge badge-info">%s</span> open pull requests...', '<b>' . count($indexData) . '</b>');
 
-		$html[] = '<table>';
+		$html[] = '<table class="table table-striped">';
+		
 
 		if (isset($indexData[0]))
 		{
 			$row = '';
+			
+			$row .= '<thead>';
 
 			$row .= '<tr>';
 
@@ -220,9 +229,13 @@ class PullTesterFormatHtml
 
 			$row .= '<th>Status</th>';
 			$row .= '</tr>';
+			
+			$row .= '</thead>';
 
 			$html[] = $row;
 		}
+		
+		$html[] = '<tbody>';
 
 		foreach ($indexData as $entry)
 		{
@@ -282,17 +295,17 @@ class PullTesterFormatHtml
 				$row .= '<td>' . sprintf($replace, $value) . '</td>';
 			}
 
-			$row .= '<td class="nowrap" style="background-color: #' . $statusColors[$overall] . '">';
+			$row .= '<td class="nowrap">';
 
 			if ($mergeable)
 			{
-				$row .= '<a href="logs/' . $entry->pull_id . 'checkstyle.xml">CS Log</a>';
+				$row .= '<a class="label label-' . $statusClass[$overall] . '" href="logs/' . $entry->pull_id . 'checkstyle.xml">CS Log</a>';
 				$row .= ' &bull; ';
-				$row .= '<a href="logs/' . $entry->pull_id . 'junit.xml">UT Log</a>';
+				$row .= '<a class="label label-' . $statusClass[$overall] . '" href="logs/' . $entry->pull_id . 'junit.xml">UT Log</a>';
 			}
 			else
 			{
-				$row .= '&nbsp;';
+				$row .= '<p  class="label label-' . $statusClass[$overall] . '">&nbsp;</p>';
 			}
 
 			$row .= '</td>';
@@ -301,6 +314,14 @@ class PullTesterFormatHtml
 
 			$html[] = $row;
 		}
+		
+		$html[] = '</tbody>';
+		
+		$html[] = '<tfoot>';
+		
+		$html[] = '<td colspan="8"></td>';
+		
+		$html[] = '</tfoot>';
 
 		$html[] = '</table>';
 
@@ -345,8 +366,9 @@ class PullTesterFormatHtml
 		$html[] = '<html>';
 		$html[] = '<head><meta http-equiv="content-type" content="text/html; charset=UTF-8">';
 		$html[] = '<title>' . $title . '</title>';
-		$html[] = '<link href="assets/css/style.css" rel="stylesheet" type="text/css" />';
-		$html[] = '<link href="favicon.ico" rel="icon" type="image/x-icon" />';
+		$html[] = '<link href="assets/css/bootstrap.min.css" rel="stylesheet" type="text/css" />';
+		$html[] = '<link href="assets/css/bootstrap-responsive.min.css" rel="stylesheet" type="text/css" />';
+		$html[] = '<link href="assets/img/favicon.ico" rel="icon" type="image/x-icon" />';
 		$html[] = '</head>';
 
 		return implode("\n", $html);
