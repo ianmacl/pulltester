@@ -4,7 +4,7 @@
  * @package     Joomla.Documentation
  * @subpackage  Application
  *
- * @copyright   Copyright (C) 2005 - 2011 Open Source Matters, Inc. All rights reserved.
+ * @copyright   Copyright (C) 2005 - 2012 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
  */
 
@@ -26,17 +26,12 @@ define('JPATH_BASE', dirname(__FILE__));
 define('JPATH_SITE', JPATH_BASE);
 define('PATH_CHECKOUTS', dirname(dirname(__FILE__)).'/checkouts');
 
-jimport('joomla.application.cli');
-jimport('joomla.database');
-jimport('joomla.database.table');
-jimport('joomla.client.github');
-
 JError::$legacy = false;
 
 /**
  *
  */
-class PullTester extends JCli
+class PullTester extends JApplicationCli
 {
 	protected $github = null;
 
@@ -354,4 +349,4 @@ class PullTester extends JCli
 }
 
 // Execute the application.
-JCli::getInstance('PullTester')->execute();
+JApplicationCli::getInstance('PullTester')->execute();
