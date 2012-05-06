@@ -1,7 +1,7 @@
 <?php
 class PullTesterFormatHtml
 {
-	private static $expectedPhpCsWarnings = 163;
+	private static $expectedPhpCsWarnings = 85;
 
 	public static function format($pullRequest, $testResults)
 	{
