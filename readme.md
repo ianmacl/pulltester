@@ -12,7 +12,8 @@ This is based on [Ian McLennan's PullTester](https://github.com/ianmacl/pulltest
 * The [Joomla! Platform](https://github.com/joomla/joomla-platform) (the more recent the better)
 
 ### Setup
-Edit the ```config.dist.php```, set the required paths and rename it to ```config.php```.
+1. Edit the ```config.dist.php```, set the required paths and rename it to ```config.php```.
+2. Run the appropriate query from `pulltester/src/sql`
 
 ### Execute
 ```cd``` to the ```src``` path and run
