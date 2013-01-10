@@ -150,7 +150,7 @@ class PullTester extends JCli
 		try
 		{
 			$store = $this->table->store();
-		} 
+		}
 		catch (Exception $e)
 		{
 			echo $e->getMessage();
@@ -201,6 +201,12 @@ class PullTester extends JCli
 		}
 
 		exec('git checkout staging');
+
+		//-- Just in case, if, for any oscure reason, the branch we are trying to create already exists...
+		//-- git wont switch to it and will remain on the 'staging' branch so...
+		//-- let's first try to delete it =;)
+		exec('git branch -D pull'.$pull->number.' 2>/dev/null');
+
 		exec('git checkout -b pull' . $pull->number);
 		exec('git fetch ' . $pull->user->login);
 
